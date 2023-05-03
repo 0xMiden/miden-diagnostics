@@ -1,0 +1,24 @@
+[workspace]
+
+members = [
+  "diagnostics",
+  "diagnostics-macros",
+]
+
+[workspace.package]
+version = "0.1.0"
+rust-version = "1.67"
+authors = ["Miden Team"]
+description = "Diagnostics infrastructure for Polygon Miden"
+repository = "https://github.com/0xPolygonMiden/miden-diagnostics"
+homepage = "https://github.com/0xPolygonMiden/miden-diagnostics"
+documentation = "https://github.com/0xPolygonMiden/miden-diagnostics"
+categories = ["Compilers"]
+keywords = ["compiler", "miden"]
+license = "MIT"
+readme = "README.md"
+edition = "2021"
+
+[profile.release]
+opt-level = 2
+lto = false
