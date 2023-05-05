@@ -63,7 +63,6 @@ impl DiagnosticsHandler {
 
     /// Report a diagnostic, forcing its severity to Error
     pub fn error(&self, error: impl ToString) {
-        self.err_count.fetch_add(1, Ordering::Relaxed);
         let diagnostic = Diagnostic::error().with_message(error.to_string());
         self.emit(diagnostic);
     }
@@ -178,6 +177,10 @@ impl DiagnosticsHandler {
                 diagnostic.severity = Severity::Error;
             }
             _ => (),
+        }
+
+        if diagnostic.severity == Severity::Error {
+            self.err_count.fetch_add(1, Ordering::Relaxed);
         }
 
         let mut buffer = self.emitter.buffer();
