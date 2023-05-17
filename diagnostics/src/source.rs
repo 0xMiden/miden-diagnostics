@@ -53,18 +53,22 @@ impl SourceFile {
         }
     }
 
+    /// Returns the [FileName] associated with this [SourceFile]
     pub fn name(&self) -> &FileName {
         &self.name
     }
 
+    /// Returns the [SourceId] associated with this [SourceFile]
     pub fn id(&self) -> SourceId {
         self.id
     }
 
+    /// Returns the parent [SourceSpan] for this [SourceFile]
     pub fn parent(&self) -> Option<SourceSpan> {
         self.parent
     }
 
+    /// Computes the [ByteIndex] at which the line corresponding to `line_index` begins
     pub fn line_start(&self, line_index: LineIndex) -> Result<ByteIndex, Error> {
         use std::cmp::Ordering;
 
@@ -78,18 +82,19 @@ impl SourceFile {
         }
     }
 
+    /// Returns the [LineIndex] of the last line in this file
     pub fn last_line_index(&self) -> LineIndex {
         LineIndex::from(self.line_starts.len() as RawIndex)
     }
 
-    pub fn line_span(&self, line_index: LineIndex) -> Result<codespan::Span, Error> {
+    pub(crate) fn line_span(&self, line_index: LineIndex) -> Result<codespan::Span, Error> {
         let line_start = self.line_start(line_index)?;
         let next_line_start = self.line_start(line_index + LineOffset::from(1))?;
 
         Ok(codespan::Span::new(line_start, next_line_start))
     }
 
-    pub fn line_index(&self, byte_index: ByteIndex) -> LineIndex {
+    pub(crate) fn line_index(&self, byte_index: ByteIndex) -> LineIndex {
         match self.line_starts.binary_search(&byte_index) {
             // Found the start of a line
             Ok(line) => LineIndex::from(line as u32),
@@ -97,8 +102,7 @@ impl SourceFile {
         }
     }
 
-    /// Returns a codespan::Span that points to the location given by the provided line:column
-    pub fn line_column_to_span(
+    pub(crate) fn line_column_to_span(
         &self,
         line_index: LineIndex,
         column_index: ColumnIndex,
@@ -123,6 +127,7 @@ impl SourceFile {
         Ok(codespan::Span::new(start + offset, start + offset))
     }
 
+    /// Returns a [Location] corresponding to the given byte index in this file.
     pub fn location<I: Into<ByteIndex>>(&self, byte_index: I) -> Result<Location, Error> {
         let byte_index = byte_index.into();
         let line_index = self.line_index(byte_index);
@@ -152,11 +157,13 @@ impl SourceFile {
         })
     }
 
+    /// Returns the underlying content of this file as a string slice
     #[inline(always)]
     pub fn source(&self) -> &str {
         self.source.as_str()
     }
 
+    /// Returns a [SourceSpan] covering all of the content in this file
     pub fn source_span(&self) -> SourceSpan {
         SourceSpan {
             source_id: self.id,
@@ -165,6 +172,9 @@ impl SourceFile {
         }
     }
 
+    /// Returns a subset of the underlying content of this file as a string slice
+    ///
+    /// The given range corresponds to character indices in the underlying content.
     pub fn source_slice(&self, span: impl Into<Range<usize>>) -> Result<&str, Error> {
         let span = span.into();
         let start = span.start;

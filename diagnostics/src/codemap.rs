@@ -5,10 +5,27 @@ use std::sync::Arc;
 
 use rustc_hash::FxHasher;
 
-type HashMap<K, V> = flurry::HashMap<K, V, core::hash::BuildHasherDefault<FxHasher>>;
-
 use super::*;
 
+type HashMap<K, V> = flurry::HashMap<K, V, core::hash::BuildHasherDefault<FxHasher>>;
+
+/// [CodeMap] is a thread-safe structure for recording source code files and their
+/// contents for use in diagnostics and parsing/compilation.
+///
+/// The [CodeMap] maintains a set of [SourceFile] entries corresponding to the sources
+/// added to it, with various auxiliary structures for tracking the [FileName] under which
+/// each source was added, the [SourceId] assigned to it, and which files on disk have
+/// been read into memory and added to it.
+///
+/// The [CodeMap] is designed to de-duplicate files and avoid reading from disk multiple
+/// times for the same [Path]. It is also designed to live for the entire lifetime of the
+/// compilation pipeline, so that at any point, diagnostics may be generated which refer
+/// to the original sources.
+///
+/// It is generally advised to allocate the [CodeMap] in an [std::sync::Arc], so that
+/// it may be freely passed around and accessed from multiple threads and/or contexts
+/// which need it. Internally it uses thread-safe datastructures, so there isn't any
+/// reason to prefer passing it around by reference.
 #[derive(Debug)]
 pub struct CodeMap {
     files: HashMap<SourceId, Arc<SourceFile>>,
@@ -27,8 +44,13 @@ impl CodeMap {
         }
     }
 
-    /// Add a file to the map, returning the handle that can be used to
-    /// refer to it again.
+    /// Add a file to this [CodeMap], returning the [SourceId] assigned to it.
+    ///
+    /// The [SourceId] acts as a unique identifier for the file and content.
+    /// However, it is not guaranteed that a [FileName] always maps to a single
+    /// [SourceId], as multiple threads may attempt to add the same file at the
+    /// same time, which in some cases may result in a duplicate entry. In general
+    /// though, they are 1:1.
     pub fn add(&self, name: impl Into<FileName>, source: String) -> SourceId {
         // De-duplicate real files on add; it _may_ be possible for concurrent
         // adds to add the same file more than once, since we're working across
@@ -78,8 +100,16 @@ impl CodeMap {
         }
     }
 
-    /// Add a file to the map with the given source span as a parent.
-    /// This will not deduplicate the file in the map.
+    /// Add a file to the map with the given [SourceSpan] as a parent.
+    ///
+    /// This is intended for use cases such as a preprocessor which needs
+    /// to include content from another file directly into the content of
+    /// its parent, as if they are part of the same logical file. When a
+    /// [SourceSpan] spans the region in which the included content occurs,
+    /// it only gets the content in the original parent file.
+    ///
+    /// NOTE: This always results in a new entry in the map in order to
+    /// record the lineage of the source content.
     pub fn add_child(
         &self,
         name: impl Into<FileName>,
@@ -103,7 +133,7 @@ impl CodeMap {
         file_id
     }
 
-    /// Get the file corresponding to the given id.
+    /// Get the [SourceFile] corresponding to the given [SourceId]
     pub fn get(&self, file_id: SourceId) -> Result<Arc<SourceFile>, Error> {
         if file_id == SourceId::UNKNOWN {
             Err(Error::FileMissing)
@@ -116,47 +146,51 @@ impl CodeMap {
         }
     }
 
-    /// Get the file corresponding to the given SourceSpan
+    /// Get the [SourceFile] corresponding to the given [SourceSpan]
+    ///
+    /// Returns `Err` if the span is `SourceSpan::UNKNOWN`
     pub fn get_with_span(&self, span: SourceSpan) -> Result<Arc<SourceFile>, Error> {
         self.get(span.source_id)
     }
 
+    /// Get the [SourceSpan] corresponding to the parent of a given [SourceId].
+    ///
+    /// Returns `None` if the given [SourceId] has no parent
     pub fn parent(&self, file_id: SourceId) -> Option<SourceSpan> {
         self.get(file_id).ok().and_then(|f| f.parent())
     }
 
-    /// Get the file id corresponding to the given FileName
+    /// Get the [SourceId] corresponding to the given [FileName]
     pub fn get_file_id(&self, filename: &FileName) -> Option<SourceId> {
         let guard = self.names.guard();
         self.names.get(filename, &guard).copied()
     }
 
-    /// Get the file corresponding to the given FileName
+    /// Get the [SourceFile] corresponding to the given [FileName]
     pub fn get_by_name(&self, filename: &FileName) -> Option<Arc<SourceFile>> {
         self.get_file_id(filename).and_then(|id| self.get(id).ok())
     }
 
-    /// Get the filename corresponding to the given SourceId
+    /// Get the [FileName] corresponding to the given [SourceId]
+    ///
+    /// Returns `Err` if `file_id` is not in this map.
     pub fn name(&self, file_id: SourceId) -> Result<FileName, Error> {
         let file = self.get(file_id)?;
         Ok(file.name().clone())
     }
 
-    /// Get the filename associated with the given SourceSpan
-    pub fn name_for_span(&self, span: SourceSpan) -> Result<FileName, Error> {
-        self.name(span.source_id)
-    }
-
-    /// Get the filename associated with the given Spanned item
-    pub fn name_for_spanned(&self, spanned: &dyn Spanned) -> Result<FileName, Error> {
+    /// Get the [FileName] associated with the given [SourceSpan]
+    ///
+    /// Returns `Err` if `span` is [SourceSpan::UNKNOWN].
+    pub fn name_for_spanned<S: Spanned>(&self, spanned: &S) -> Result<FileName, Error> {
         self.name(spanned.span().source_id)
     }
 
-    /// Get a SourceSpan corresponding to the given line:column
+    /// Get a [SourceSpan] corresponding to the given line:column
     ///
-    /// NOTE: The returned SourceSpan points only to line:column, it does not
+    /// NOTE: The returned [SourceSpan] points only to line:column, it does not
     /// span any neighboring source locations, callers must extend the returned
-    /// SourceSpan if so desired.
+    /// span if so desired.
     pub fn line_column_to_span(
         &self,
         file_id: SourceId,
@@ -170,7 +204,7 @@ impl CodeMap {
         Ok(SourceSpan::new(start, end))
     }
 
-    pub fn line_span(
+    fn line_span(
         &self,
         file_id: SourceId,
         line_index: impl Into<LineIndex>,
@@ -179,7 +213,7 @@ impl CodeMap {
         f.line_span(line_index.into())
     }
 
-    pub fn line_index(
+    fn line_index(
         &self,
         file_id: SourceId,
         byte_index: impl Into<ByteIndex>,
@@ -187,7 +221,16 @@ impl CodeMap {
         Ok(self.get(file_id)?.line_index(byte_index.into()))
     }
 
-    pub fn location(
+    /// Get a [Location] from a [SourceSpan]
+    ///
+    /// Returns `Err` if `span` is [SourceSpan::UNKNOWN].
+    pub fn location<S: Spanned>(&self, spanned: &S) -> Result<Location, Error> {
+        let span = spanned.span();
+        self.location_at_index(span.source_id, span.start)
+    }
+
+    /// Get a [Location] from a given [SourceId] and byte index.
+    fn location_at_index(
         &self,
         file_id: SourceId,
         byte_index: impl Into<ByteIndex>,
@@ -195,35 +238,17 @@ impl CodeMap {
         self.get(file_id)?.location(byte_index)
     }
 
-    /// Get the Location associated with the given SourceSpan
-    pub fn location_for_span(&self, span: SourceSpan) -> Result<Location, Error> {
-        self.location(span.source_id, span)
-    }
-
-    /// Get the Location associated with the given Spanned item
-    pub fn location_for_spanned(&self, spanned: &dyn Spanned) -> Result<Location, Error> {
-        let span = spanned.span();
-        self.location(span.source_id, span)
-    }
-
+    /// Get a [SourceSpan] representing the entire content of `file_id`
     pub fn source_span(&self, file_id: SourceId) -> Result<SourceSpan, Error> {
         Ok(self.get(file_id)?.source_span())
     }
 
-    pub fn source_slice<'a>(
-        &'a self,
-        file_id: SourceId,
-        span: impl Into<codespan::Span>,
-    ) -> Result<&'a str, Error> {
-        let f = self.get(file_id)?;
-        let slice = f.source_slice(span.into())?;
-        unsafe { Ok(std::mem::transmute::<&str, &'a str>(slice)) }
-    }
-
-    /// Get the source string associated with the given Spanned item
-    pub fn source_slice_for_spanned<'a>(&'a self, spanned: &dyn Spanned) -> Result<&'a str, Error> {
+    /// Get the original source content corresponding to `spanned` as a `&str`
+    pub fn source_slice<'a, S: Spanned>(&'a self, spanned: &S) -> Result<&'a str, Error> {
         let span = spanned.span();
-        self.source_slice(span.source_id, span)
+        let f = self.get(span.source_id)?;
+        let slice = f.source_slice(span)?;
+        unsafe { Ok(std::mem::transmute::<&str, &'a str>(slice)) }
     }
 
     #[inline(always)]

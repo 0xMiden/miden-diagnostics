@@ -6,8 +6,26 @@ use std::ops::{Deref, DerefMut, Range};
 
 use codespan::{ByteIndex, ByteOffset};
 
-use super::{CodeMap, SourceId, SourceIndex};
+use super::{SourceId, SourceIndex};
 
+/// Represents a range of bytes in a specific source file
+///
+/// A [SourceSpan] is a combination of [SourceId] and a range
+/// of byte indices in the corresponding file. With one, you may
+/// obtain a variety of useful information about the source to which
+/// it maps using the `CodeMap` from which it was created:
+///
+/// * Can be used to get a `str` of the original file content containing
+/// just the specified range.
+/// * Can be used to get file/line/column at which the span starts
+/// * Can be used to get the [SourceFile] from which it is derived
+///
+/// A [SourceSpan] has a canonical "default" value, which is represented
+/// by `SourceSpan::UNKNOWN`. It can be treated like a regular span, however
+/// when a request is made for content or location information corresponding
+/// to it, those APIs will return `None` or `Err`. This is useful when
+/// constructing syntax trees and the like without sources, such as in
+/// testing scenarios.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SourceSpan {
     pub(crate) source_id: SourceId,
@@ -60,59 +78,25 @@ impl SourceSpan {
         }
     }
 
-    pub fn new_align<F>(start: SourceIndex, end: SourceIndex, get_codemap: F) -> SourceSpan
-    where
-        F: Fn(&mut dyn FnOnce(&CodeMap)),
-    {
-        let start_source = start.source_id();
-        let end_source = end.source_id();
-
-        if start_source == end_source {
-            Self::new(start, end)
-        } else {
-            let mut result = None;
-            get_codemap(&mut |codemap: &CodeMap| {
-                let mut idx = start_source;
-                while let Some(parent) = codemap.parent(idx) {
-                    if idx == end_source {
-                        result = Some(Self::new(parent.start(), end));
-                        return;
-                    }
-                    idx = parent.source_id();
-                }
-
-                let mut idx = end_source;
-                while let Some(parent) = codemap.parent(idx) {
-                    if idx == start_source {
-                        result = Some(Self::new(start, parent.end()));
-                        return;
-                    }
-                    idx = parent.source_id();
-                }
-            });
-            result.expect("source spans cannot be aligned!")
-        }
-    }
-
     /// Returns true if this span represents an "unknown" source span
     #[inline(always)]
     pub fn is_unknown(self) -> bool {
         self == Self::UNKNOWN
     }
 
-    /// Returns the source id associated with this span
+    /// Returns the [SourceId] associated with this span
     #[inline(always)]
     pub fn source_id(&self) -> SourceId {
         self.source_id
     }
 
-    /// Returns the starting source index of this span
+    /// Returns the starting [SourceIndex] of this span
     #[inline(always)]
     pub fn start(&self) -> SourceIndex {
         SourceIndex::new(self.source_id, self.start)
     }
 
-    /// Returns the starting byte index of this span in its SourceFile
+    /// Returns the starting [ByteIndex] of this span in its [SourceFile]
     #[inline(always)]
     pub fn start_index(&self) -> ByteIndex {
         self.start
@@ -182,7 +166,7 @@ impl From<SourceSpan> for Range<SourceIndex> {
     }
 }
 
-/// This trait is implemented by any type which carries source span information
+/// This trait is implemented by any type which has a canoncial [SourceSpan]
 pub trait Spanned {
     fn span(&self) -> SourceSpan;
 }
@@ -199,11 +183,15 @@ impl<T: Spanned> Spanned for Box<T> {
     }
 }
 
-/// `Span<T>` is a wrapper struct for types which do not themselves implement the Spanned trait,
-/// but to which we'd like to attach a source span. A `Span<T>` can be treated more or less like
-/// a transparent container for a `T`, and it implements `Spanned` for the contained type.
+/// [Span] is used to wrap types which do not implement [Spanned] in a type that does.
+///
+/// [Span] is a bit special in that it is intended to be as transparent as possible, that
+/// means that it implements a variety of traits in a passthrough fashion, so that the span
+/// added to the underlying type does not change its behavior with regards to equality, hashing,
+/// ordering, etc. It does however have a [Debug] implementation that shows the span.
 pub struct Span<T: ?Sized> {
     span: SourceSpan,
+    /// The underlying item wrapped by this [Span]
     pub item: T,
 }
 impl<T: ?Sized> Spanned for Span<T> {
@@ -213,6 +201,7 @@ impl<T: ?Sized> Spanned for Span<T> {
     }
 }
 impl<T> Span<T> {
+    /// Construct a new [Span] from a [SourceSpan] and a [T]
     pub const fn new(span: SourceSpan, item: T) -> Self {
         Self { span, item }
     }

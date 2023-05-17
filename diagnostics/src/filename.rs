@@ -2,6 +2,9 @@ use std::borrow::Cow;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+/// A [FileName] represents the name of a logical source code file,
+/// while retaining some context about whether that file is a real file on
+/// disk, or a "virtual" file, i.e. only exists in memory.
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum FileName {
     /// A real file on disk
@@ -9,13 +12,11 @@ pub enum FileName {
     /// A synthetic file, eg. from the REPL
     Virtual(Cow<'static, str>),
 }
-
 impl From<PathBuf> for FileName {
     fn from(name: PathBuf) -> FileName {
         FileName::real(name)
     }
 }
-
 impl From<FileName> for PathBuf {
     fn from(name: FileName) -> PathBuf {
         match name {
@@ -25,7 +26,6 @@ impl From<FileName> for PathBuf {
         }
     }
 }
-
 impl<'a> From<&'a FileName> for &'a Path {
     fn from(name: &'a FileName) -> &'a Path {
         match *name {
@@ -34,25 +34,21 @@ impl<'a> From<&'a FileName> for &'a Path {
         }
     }
 }
-
 impl<'a> From<&'a Path> for FileName {
     fn from(name: &Path) -> FileName {
         FileName::real(name)
     }
 }
-
 impl From<String> for FileName {
     fn from(name: String) -> FileName {
         FileName::virtual_(name)
     }
 }
-
 impl From<&'static str> for FileName {
     fn from(name: &'static str) -> FileName {
         FileName::virtual_(name)
     }
 }
-
 impl AsRef<Path> for FileName {
     fn as_ref(&self) -> &Path {
         match *self {
@@ -61,24 +57,23 @@ impl AsRef<Path> for FileName {
         }
     }
 }
-
 impl PartialEq<Path> for FileName {
     fn eq(&self, other: &Path) -> bool {
         self.as_ref() == other
     }
 }
-
 impl PartialEq<PathBuf> for FileName {
     fn eq(&self, other: &PathBuf) -> bool {
         self.as_ref() == other.as_path()
     }
 }
-
 impl FileName {
+    /// Creates a new [FileName] that is intended to represent a real file on disk.
     pub fn real<T: Into<PathBuf>>(name: T) -> FileName {
         FileName::Real(name.into())
     }
 
+    /// Creates a new [FileName] that is intended to represent a virtual file in memory.
     pub fn virtual_<T: Into<Cow<'static, str>>>(name: T) -> FileName {
         FileName::Virtual(name.into())
     }
@@ -111,7 +106,6 @@ impl FileName {
         }
     }
 }
-
 impl fmt::Display for FileName {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match *self {

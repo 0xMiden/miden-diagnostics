@@ -34,6 +34,10 @@ pub use self::span::{SourceSpan, Span, Spanned};
 pub type Diagnostic = codespan_reporting::diagnostic::Diagnostic<SourceId>;
 pub type Label = codespan_reporting::diagnostic::Label<SourceId>;
 
+/// [ToDiagnostic] should be implemented on types which can be converted to a [Diagnostic].
+///
+/// This is largely intended for implementations of [std::error::Error], but may be implemented
+/// for any type that has a canonical [Diagnostic] representation.
 pub trait ToDiagnostic {
     fn to_diagnostic(self) -> Diagnostic;
 }
@@ -44,6 +48,7 @@ impl ToDiagnostic for Diagnostic {
     }
 }
 
+#[doc(hidden)]
 pub struct FatalErrorMarker;
 
 /// Used as a return value to signify a fatal error occurred

@@ -5,6 +5,9 @@ use codespan::{ByteIndex, ByteOffset, RawIndex, RawOffset};
 
 use super::SourceId;
 
+/// [SourceIndex] is a compact representation of a byte index in a specific source file.
+///
+/// It has a canonical representation for "unknown" indices, similar to that of [SourceSpan]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SourceIndex(NonZeroUsize);
 impl SourceIndex {
@@ -12,8 +15,10 @@ impl SourceIndex {
 
     const UNKNOWN_SRC_ID: usize = (SourceId::UNKNOWN_SOURCE_ID as usize) << 32;
 
+    /// Represents an invalid/unknown [SourceIndex]
     pub const UNKNOWN: Self = Self(unsafe { NonZeroUsize::new_unchecked(Self::UNKNOWN_SRC_ID) });
 
+    /// Constructs a new [SourceIndex] from a [SourceId] and a [ByteIndex]
     #[inline]
     pub fn new(source: SourceId, index: ByteIndex) -> Self {
         let source = (source.get() as usize) << 32;
@@ -21,6 +26,7 @@ impl SourceIndex {
         Self(NonZeroUsize::new(source | index.0 as usize).unwrap())
     }
 
+    /// Returns the [SourceId] corresponding to this [SourceIndex]
     #[inline]
     pub fn source_id(&self) -> SourceId {
         let source_id_part = (self.0.get() >> 32) as u32;
@@ -31,11 +37,13 @@ impl SourceIndex {
         }
     }
 
+    /// Returns the [ByteIndex] corresponding to this [SourceIndex]
     #[inline]
     pub fn index(&self) -> ByteIndex {
         ByteIndex((self.0.get() & Self::INDEX_MASK) as u32)
     }
 
+    #[doc(hidden)]
     pub fn to_usize(&self) -> usize {
         self.0.get()
     }

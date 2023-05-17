@@ -31,6 +31,7 @@ impl<'h> InFlightDiagnostic<'h> {
         matches!(self.handler.display.display_style, DisplayStyle::Rich)
     }
 
+    /// Sets the current source file to which this diagnostic applies
     pub fn set_source_file(mut self, filename: impl Into<FileName>) -> Self {
         let filename = filename.into();
         let file_id = self.handler.codemap.get_file_id(&filename);
@@ -38,11 +39,13 @@ impl<'h> InFlightDiagnostic<'h> {
         self
     }
 
+    /// Sets the diagnostic message to `message`
     pub fn with_message(mut self, message: impl ToString) -> Self {
         self.diagnostic.message = message.to_string();
         self
     }
 
+    /// Adds a primary label for `span` to this diagnostic, with no label message.
     pub fn with_primary_span(mut self, span: SourceSpan) -> Self {
         self.diagnostic
             .labels
@@ -50,6 +53,11 @@ impl<'h> InFlightDiagnostic<'h> {
         self
     }
 
+    /// Adds a primary label for `span` to this diagnostic, with the given message
+    ///
+    /// A primary label is one which should be rendered as the relevant source code
+    /// at which a diagnostic originates. Secondary labels are used for related items
+    /// involved in the diagnostic.
     pub fn with_primary_label(mut self, span: SourceSpan, message: impl ToString) -> Self {
         self.diagnostic
             .labels
@@ -57,6 +65,11 @@ impl<'h> InFlightDiagnostic<'h> {
         self
     }
 
+    /// Adds a secondary label for `span` to this diagnostic, with the given message
+    ///
+    /// A secondary label is used to point out related items in the source code which
+    /// are relevant to the diagnostic, but which are not themselves the point at which
+    /// the diagnostic originates.
     pub fn with_secondary_label(mut self, span: SourceSpan, message: impl ToString) -> Self {
         self.diagnostic
             .labels
@@ -64,6 +77,9 @@ impl<'h> InFlightDiagnostic<'h> {
         self
     }
 
+    /// Like `with_primary_label`, but rather than a [SourceSpan], it accepts a
+    /// line and column number, which will be mapped to an appropriate span by
+    /// the [CodeMap].
     pub fn with_primary_label_line_and_col(
         self,
         line: u32,
@@ -74,6 +90,8 @@ impl<'h> InFlightDiagnostic<'h> {
         self.with_label_and_file_id(LabelStyle::Primary, file_id, line, column, message)
     }
 
+    /// This is a lower-level function for adding labels to diagnostics, providing
+    /// full control over its style, content, and location in the source code.
     pub fn with_label(
         self,
         style: LabelStyle,
@@ -116,20 +134,29 @@ impl<'h> InFlightDiagnostic<'h> {
         }
     }
 
+    /// Adds a note to the diagnostic
+    ///
+    /// Notes are used for explaining general concepts or suggestions
+    /// related to a diagnostic, and are not associated with any particular
+    /// source location. They are always rendered after the other diagnostic
+    /// content.
     pub fn with_note(mut self, note: impl ToString) -> Self {
         self.diagnostic.notes.push(note.to_string());
         self
     }
 
+    /// Like `with_note`, but is intended for use cases where the
+    /// fluent/builder pattern used here is cumbersome.
     pub fn add_note(&mut self, note: impl ToString) {
         self.diagnostic.notes.push(note.to_string());
     }
 
+    /// Consume this [InFlightDiagnostic] and extract the underlying [Diagnostic]
     pub fn take(self) -> Diagnostic {
         self.diagnostic
     }
 
-    /// Emit the diagnostic via the DiagnosticHandler
+    /// Emit the underlying [Diagnostic] via the [DiagnosticHandler]
     pub fn emit(self) {
         self.handler.emit(self.diagnostic);
     }
