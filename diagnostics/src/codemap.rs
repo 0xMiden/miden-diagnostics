@@ -1,5 +1,5 @@
 use std::ops::Range;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
@@ -54,6 +54,27 @@ impl CodeMap {
             }
         } else {
             self.insert_file(name, source, None)
+        }
+    }
+
+    /// Adds a file to the map from the given `path`, if not already present.
+    ///
+    /// Returns `Ok` if successfully added, or `Err` if an error occurred
+    /// while reading the file from disk.
+    pub fn add_file<P: AsRef<Path>>(&self, path: P) -> std::io::Result<SourceId> {
+        let path = path.as_ref();
+        let name = path.into();
+        let guard = self.seen.guard();
+        match self.seen.get(path, &guard) {
+            Some(id) => Ok(*id),
+            None => {
+                let source = std::fs::read_to_string(path)?;
+                let source_id = self.insert_file(name, source, None);
+                match self.seen.try_insert(path.to_path_buf(), source_id, &guard) {
+                    Ok(id) => Ok(*id),
+                    Err(err) => Ok(*err.current),
+                }
+            }
         }
     }
 
