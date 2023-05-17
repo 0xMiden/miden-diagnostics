@@ -40,9 +40,6 @@ impl Verbosity {
     }
 
     pub fn is_silent(&self) -> bool {
-        match self {
-            Self::Silent => true,
-            _ => false,
-        }
+        matches!(self, Self::Silent)
     }
 }

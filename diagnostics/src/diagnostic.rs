@@ -28,10 +28,7 @@ impl<'h> InFlightDiagnostic<'h> {
     /// not know what the current diagnostic configuration is
     pub fn verbose(&self) -> bool {
         use crate::term::DisplayStyle;
-        match self.handler.display.display_style {
-            DisplayStyle::Rich => true,
-            _ => false,
-        }
+        matches!(self.handler.display.display_style, DisplayStyle::Rich)
     }
 
     pub fn set_source_file(mut self, filename: impl Into<FileName>) -> Self {
@@ -73,7 +70,7 @@ impl<'h> InFlightDiagnostic<'h> {
         column: u32,
         message: Option<String>,
     ) -> Self {
-        let file_id = self.file_id.clone();
+        let file_id = self.file_id;
         self.with_label_and_file_id(LabelStyle::Primary, file_id, line, column, message)
     }
 

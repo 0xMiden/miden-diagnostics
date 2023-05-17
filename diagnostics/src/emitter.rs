@@ -67,13 +67,7 @@ impl NullEmitter {
         let ansi = match color {
             ColorChoice::Never => false,
             ColorChoice::Always | ColorChoice::AlwaysAnsi => true,
-            ColorChoice::Auto => {
-                if atty::is(atty::Stream::Stdout) {
-                    true
-                } else {
-                    false
-                }
-            }
+            ColorChoice::Auto => atty::is(atty::Stream::Stdout),
         };
         Self { ansi }
     }

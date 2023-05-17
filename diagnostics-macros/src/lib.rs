@@ -322,10 +322,7 @@ fn make_delegated_member_access(receiver: Expr) -> Expr {
 }
 
 fn has_span_attr(attrs: &[Attribute]) -> bool {
-    attrs
-        .iter()
-        .find(|attr| attr.path.is_ident("span"))
-        .is_some()
+    attrs.iter().any(|attr| attr.path.is_ident("span"))
 }
 
 fn extract_span_fields(
@@ -436,9 +433,7 @@ fn is_source_span(ty: &syn::Type) -> bool {
                 return true;
             }
             match tpath.path.segments.len() {
-                1 if tpath.path.leading_colon.is_none() => {
-                    return false;
-                }
+                1 if tpath.path.leading_colon.is_none() => false,
                 1 => {
                     let first = tpath.path.segments.first().unwrap();
                     first.ident == "SourceSpan" && first.arguments == PathArguments::None

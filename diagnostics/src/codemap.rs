@@ -97,7 +97,7 @@ impl CodeMap {
         let file_guard = self.files.guard();
         self.files.insert(
             file_id,
-            Arc::new(SourceFile::new(file_id, name.into(), source, parent)),
+            Arc::new(SourceFile::new(file_id, name, source, parent)),
             &file_guard,
         );
         file_id
@@ -128,7 +128,7 @@ impl CodeMap {
     /// Get the file id corresponding to the given FileName
     pub fn get_file_id(&self, filename: &FileName) -> Option<SourceId> {
         let guard = self.names.guard();
-        self.names.get(filename, &guard).map(|id| *id)
+        self.names.get(filename, &guard).copied()
     }
 
     /// Get the file corresponding to the given FileName

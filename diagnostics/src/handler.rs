@@ -83,12 +83,11 @@ impl DiagnosticsHandler {
         }
         let info_color = self.display.styles.header(Severity::Help);
         let mut buffer = self.emitter.buffer();
-        buffer.set_color(&info_color).ok();
-        write!(&mut buffer, "info").unwrap();
+        buffer.set_color(info_color).ok();
+        buffer.write_all(b"info").unwrap();
         buffer.set_color(&self.display.styles.header_message).ok();
-        write!(&mut buffer, ": {}", message.to_string()).unwrap();
+        writeln!(&mut buffer, ": {}", message.to_string()).unwrap();
         buffer.reset().ok();
-        write!(&mut buffer, "\n").unwrap();
         self.emitter.print(buffer).unwrap();
     }
 
@@ -101,11 +100,10 @@ impl DiagnosticsHandler {
         debug_color.set_fg(Some(Color::Blue));
         let mut buffer = self.emitter.buffer();
         buffer.set_color(&debug_color).ok();
-        write!(&mut buffer, "debug").unwrap();
+        buffer.write_all(b"debug").unwrap();
         buffer.set_color(&self.display.styles.header_message).ok();
-        write!(&mut buffer, ": {}", message.to_string()).unwrap();
+        writeln!(&mut buffer, ": {}", message.to_string()).unwrap();
         buffer.reset().ok();
-        write!(&mut buffer, "\n").unwrap();
         self.emitter.print(buffer).unwrap();
     }
 
@@ -148,10 +146,11 @@ impl DiagnosticsHandler {
 
     fn write_prefixed(&self, color: &ColorSpec, prefix: &str, message: impl ToString) {
         let mut buffer = self.emitter.buffer();
-        buffer.set_color(&color).ok();
+        buffer.set_color(color).ok();
         write!(&mut buffer, "{:>12} ", prefix).unwrap();
         buffer.reset().ok();
-        writeln!(&mut buffer, "{}", message.to_string()).unwrap();
+        let message = message.to_string();
+        buffer.write_all(message.as_bytes()).unwrap();
         self.emitter.print(buffer).unwrap();
     }
 

@@ -110,16 +110,6 @@ impl FileName {
             FileName::Virtual(s) => Some(s.as_ref()),
         }
     }
-
-    pub fn to_string(&self) -> String {
-        match *self {
-            FileName::Real(ref path) => match path.to_str() {
-                None => path.to_string_lossy().into_owned(),
-                Some(s) => s.to_owned(),
-            },
-            FileName::Virtual(ref s) => s.clone().into_owned(),
-        }
-    }
 }
 
 impl fmt::Display for FileName {

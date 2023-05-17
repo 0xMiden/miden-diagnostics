@@ -60,11 +60,10 @@ impl SourceSpan {
         }
     }
 
-    pub fn new_align<F>(
-        start: SourceIndex,
-        end: SourceIndex,
-        get_codemap: &dyn Fn(&mut dyn FnOnce(&CodeMap)),
-    ) -> SourceSpan {
+    pub fn new_align<F>(start: SourceIndex, end: SourceIndex, get_codemap: F) -> SourceSpan
+    where
+        F: Fn(&mut dyn FnOnce(&CodeMap)),
+    {
         let start_source = start.source_id();
         let end_source = end.source_id();
 
@@ -74,29 +73,21 @@ impl SourceSpan {
             let mut result = None;
             get_codemap(&mut |codemap: &CodeMap| {
                 let mut idx = start_source;
-                loop {
-                    if let Some(parent) = codemap.parent(idx) {
-                        if idx == end_source {
-                            result = Some(Self::new(parent.start(), end));
-                            return;
-                        }
-                        idx = parent.source_id();
-                    } else {
-                        break;
+                while let Some(parent) = codemap.parent(idx) {
+                    if idx == end_source {
+                        result = Some(Self::new(parent.start(), end));
+                        return;
                     }
+                    idx = parent.source_id();
                 }
 
                 let mut idx = end_source;
-                loop {
-                    if let Some(parent) = codemap.parent(idx) {
-                        if idx == start_source {
-                            result = Some(Self::new(start, parent.end()));
-                            return;
-                        }
-                        idx = parent.source_id();
-                    } else {
-                        break;
+                while let Some(parent) = codemap.parent(idx) {
+                    if idx == start_source {
+                        result = Some(Self::new(start, parent.end()));
+                        return;
                     }
+                    idx = parent.source_id();
                 }
             });
             result.expect("source spans cannot be aligned!")
@@ -166,16 +157,16 @@ impl SourceSpan {
         ))
     }
 }
-impl Into<codespan::Span> for SourceSpan {
+impl From<SourceSpan> for codespan::Span {
     #[inline]
-    fn into(self) -> codespan::Span {
-        codespan::Span::new(self.start, self.end)
+    fn from(span: SourceSpan) -> Self {
+        Self::new(span.start, span.end)
     }
 }
-impl Into<ByteIndex> for SourceSpan {
+impl From<SourceSpan> for ByteIndex {
     #[inline]
-    fn into(self) -> ByteIndex {
-        self.start_index()
+    fn from(span: SourceSpan) -> Self {
+        span.start_index()
     }
 }
 impl From<SourceSpan> for Range<usize> {
@@ -202,8 +193,9 @@ impl Spanned for SourceSpan {
     }
 }
 impl<T: Spanned> Spanned for Box<T> {
+    #[inline]
     fn span(&self) -> SourceSpan {
-        (&**self).span()
+        self.as_ref().span()
     }
 }
 
