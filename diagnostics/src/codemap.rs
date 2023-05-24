@@ -230,7 +230,7 @@ impl CodeMap {
     }
 
     /// Get a [Location] from a given [SourceId] and byte index.
-    fn location_at_index(
+    pub fn location_at_index(
         &self,
         file_id: SourceId,
         byte_index: impl Into<ByteIndex>,
