@@ -7,9 +7,8 @@ members = [
 
 [workspace.package]
 version = "0.1.0"
-rust-version = "1.67"
-authors = ["Miden Team"]
-description = "Diagnostics infrastructure for Polygon Miden"
+authors = ["miden contributors"]
+description = "Diagnostics infrastructure for Polygon Miden compilers"
 repository = "https://github.com/0xPolygonMiden/miden-diagnostics"
 homepage = "https://github.com/0xPolygonMiden/miden-diagnostics"
 documentation = "https://github.com/0xPolygonMiden/miden-diagnostics"
@@ -18,6 +17,7 @@ keywords = ["compiler", "miden"]
 license = "MIT"
 readme = "README.md"
 edition = "2021"
+rust-version = "1.67"
 
 [profile.release]
 opt-level = 2

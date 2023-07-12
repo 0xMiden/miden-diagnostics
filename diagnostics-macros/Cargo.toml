@@ -1,6 +1,6 @@
 [package]
-name = "miden_diagnostics_macros"
-description = "Macro support crate for miden_diagnostics"
+name = "miden-diagnostics-macros"
+description = "Macro support crate for miden-diagnostics"
 version.workspace = true
 rust-version.workspace = true
 authors.workspace = true
