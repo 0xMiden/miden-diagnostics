@@ -18,7 +18,7 @@ use super::{SourceId, SourceIndex};
 /// * Can be used to get a `str` of the original file content containing
 ///   just the specified range.
 /// * Can be used to get file/line/column at which the span starts
-/// * Can be used to get the [SourceFile] from which it is derived
+/// * Can be used to get the [crate::source::SourceFile] from which it is derived
 ///
 /// A [SourceSpan] has a canonical "default" value, which is represented
 /// by `SourceSpan::UNKNOWN`. It can be treated like a regular span, however
@@ -96,7 +96,7 @@ impl SourceSpan {
         SourceIndex::new(self.source_id, self.start)
     }
 
-    /// Returns the starting [ByteIndex] of this span in its [SourceFile]
+    /// Returns the starting [ByteIndex] of this span in its [crate::source::SourceFile]
     #[inline(always)]
     pub fn start_index(&self) -> ByteIndex {
         self.start
@@ -201,7 +201,7 @@ impl<T: ?Sized> Spanned for Span<T> {
     }
 }
 impl<T> Span<T> {
-    /// Construct a new [Span] from a [SourceSpan] and a [T]
+    /// Construct a new [Span] from a [SourceSpan] and a generic item
     pub const fn new(span: SourceSpan, item: T) -> Self {
         Self { span, item }
     }
