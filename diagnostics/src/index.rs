@@ -11,7 +11,7 @@ use super::SourceId;
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SourceIndex(NonZeroUsize);
 impl SourceIndex {
-    const INDEX_MASK: usize = u32::max_value() as usize;
+    const INDEX_MASK: usize = u32::MAX as usize;
 
     const UNKNOWN_SRC_ID: usize = (SourceId::UNKNOWN_SOURCE_ID as usize) << 32;
 

@@ -8,7 +8,7 @@ use super::*;
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SourceId(pub(crate) NonZeroU32);
 impl SourceId {
-    pub(crate) const UNKNOWN_SOURCE_ID: u32 = u32::max_value();
+    pub(crate) const UNKNOWN_SOURCE_ID: u32 = u32::MAX;
 
     pub const UNKNOWN: Self = Self(unsafe { NonZeroU32::new_unchecked(Self::UNKNOWN_SOURCE_ID) });
 

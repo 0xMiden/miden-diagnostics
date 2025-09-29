@@ -34,7 +34,7 @@ impl<'a> From<&'a FileName> for &'a Path {
         }
     }
 }
-impl<'a> From<&'a Path> for FileName {
+impl From<&Path> for FileName {
     fn from(name: &Path) -> FileName {
         FileName::real(name)
     }

@@ -16,7 +16,7 @@ use super::{SourceId, SourceIndex};
 /// it maps using the `CodeMap` from which it was created:
 ///
 /// * Can be used to get a `str` of the original file content containing
-/// just the specified range.
+///   just the specified range.
 /// * Can be used to get file/line/column at which the span starts
 /// * Can be used to get the [SourceFile] from which it is derived
 ///
