@@ -156,7 +156,7 @@ impl<'h> InFlightDiagnostic<'h> {
         self.diagnostic
     }
 
-    /// Emit the underlying [Diagnostic] via the [DiagnosticHandler]
+    /// Emit the underlying [Diagnostic] via the [DiagnosticsHandler]
     pub fn emit(self) {
         self.handler.emit(self.diagnostic);
     }

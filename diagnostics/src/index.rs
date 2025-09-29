@@ -7,11 +7,11 @@ use super::SourceId;
 
 /// [SourceIndex] is a compact representation of a byte index in a specific source file.
 ///
-/// It has a canonical representation for "unknown" indices, similar to that of [SourceSpan]
+/// It has a canonical representation for "unknown" indices, similar to that of [crate::span::SourceSpan]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SourceIndex(NonZeroUsize);
 impl SourceIndex {
-    const INDEX_MASK: usize = u32::max_value() as usize;
+    const INDEX_MASK: usize = u32::MAX as usize;
 
     const UNKNOWN_SRC_ID: usize = (SourceId::UNKNOWN_SOURCE_ID as usize) << 32;
 
