@@ -110,7 +110,7 @@ impl fmt::Display for FileName {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             FileName::Real(ref path) => write!(fmt, "{}", path.display()),
-            FileName::Virtual(ref name) => write!(fmt, "<{}>", name),
+            FileName::Virtual(ref name) => write!(fmt, "{}", name),
         }
     }
 }
