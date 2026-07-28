@@ -1,0 +1,23 @@
+[package]
+name = "miden-diagnostics-macros"
+version.workspace = true
+authors.workspace = true
+description = "Derive support for miden-diagnostics"
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+categories.workspace = true
+keywords.workspace = true
+license.workspace = true
+readme = "README.md"
+edition.workspace = true
+rust-version.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro-crate = "=3.5.0"
+proc-macro2 = "=1.0.107"
+quote = "=1.0.47"
+syn = { version = "=2.0.119", features = ["full"] }

@@ -1,0 +1,11 @@
+[package]
+name = "no-std-consumer"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97"
+publish = false
+
+[dependencies]
+miden-diagnostics = { path = "../../..", default-features = false, features = ["derive"] }
+
+[workspace]

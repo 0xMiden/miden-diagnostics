@@ -1,24 +1,25 @@
 [workspace]
-resolver = "2"
+resolver = "3"
+
 members = [
-  "diagnostics",
-  "diagnostics-macros",
+  "crates/*",
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "1.0.0"
 authors = ["miden contributors"]
-description = "Diagnostics infrastructure for Polygon Miden compilers"
-repository = "https://github.com/0xPolygonMiden/miden-diagnostics"
-homepage = "https://github.com/0xPolygonMiden/miden-diagnostics"
-documentation = "https://github.com/0xPolygonMiden/miden-diagnostics"
+description = "Diagnostics infrastructure for Miden tooling"
+repository = "https://github.com/0xMiden/miden-diagnostics"
+homepage = "https://github.com/0xMiden/miden-diagnostics"
+documentation = "https://github.com/0xMiden/miden-diagnostics"
 categories = ["Compilers"]
 keywords = ["compiler", "miden"]
-license = "MIT"
+license = "MIT OR Apache-2.0"
 readme = "README.md"
-edition = "2021"
-rust-version = "1.67"
+edition = "2024"
+rust-version = "1.97"
+exclude = [".github/", "docs/", "experiments/"]
 
 [profile.release]
 opt-level = 2
-lto = false
+lto = true

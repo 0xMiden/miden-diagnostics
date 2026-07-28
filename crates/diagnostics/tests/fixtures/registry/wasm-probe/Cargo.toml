@@ -1,0 +1,19 @@
+[package]
+name = "registry-wasm-probe"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+anchors = []
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+diag-runtime = { workspace = true, features = ["std", "linked-registry"] }
+registry-definitions-alpha.workspace = true
+registry-definitions-beta.workspace = true

@@ -1,0 +1,17 @@
+[package]
+name = "linked-no-std"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97"
+publish = false
+
+[[bin]]
+name = "linked-no-std"
+path = "src/main.rs"
+test = false
+bench = false
+
+[dependencies]
+no-std-consumer = { path = "../no-std-consumer" }
+
+[workspace]

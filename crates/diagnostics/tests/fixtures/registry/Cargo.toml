@@ -1,0 +1,30 @@
+[workspace]
+resolver = "3"
+members = [
+    "definitions-alpha",
+    "definitions-beta",
+    "definitions-duplicate",
+    "native-probe",
+    "wasm-probe",
+]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[workspace.dependencies]
+diag-runtime = { package = "miden-diagnostics", path = "../../..", default-features = false }
+renamed-diagnostics = { package = "miden-diagnostics", path = "../../..", default-features = false }
+registry-definitions-alpha = { path = "definitions-alpha" }
+registry-definitions-beta = { path = "definitions-beta" }
+registry-definitions-duplicate = { path = "definitions-duplicate" }
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+opt-level = "z"
+panic = "abort"
+strip = false

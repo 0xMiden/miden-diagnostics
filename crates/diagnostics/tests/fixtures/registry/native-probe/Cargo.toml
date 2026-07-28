@@ -1,0 +1,19 @@
+[package]
+name = "registry-native-probe"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+anchors = []
+duplicate = ["anchors", "dep:registry-definitions-duplicate"]
+embed = ["diag-runtime/embed-explanations"]
+
+[dependencies]
+diag-runtime = { workspace = true, features = ["std", "linked-registry"] }
+registry-definitions-alpha.workspace = true
+registry-definitions-beta.workspace = true
+registry-definitions-duplicate = { workspace = true, optional = true }

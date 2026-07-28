@@ -1,0 +1,61 @@
+[package]
+name = "miden-diagnostics"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+categories.workspace = true
+keywords.workspace = true
+license.workspace = true
+readme = "README.md"
+edition.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["std", "derive"]
+std = ["annotate-snippets/std"]
+derive = ["dep:miden-diagnostics-macros"]
+simd = ["annotate-snippets/simd"]
+embed-explanations = []
+linked-registry = ["std", "dep:inventory"]
+
+[dependencies]
+annotate-snippets = { version = "=0.12.16", default-features = false }
+inventory = { version = "=0.3.24", optional = true }
+miden-diagnostics-macros = { path = "../diagnostics-macros", optional = true }
+
+[dev-dependencies]
+annotate-snippets = { version = "=0.12.16", default-features = false, features = ["testing-colors"] }
+wasmi = { version = "=1.1.0", default-features = false, features = ["std"] }
+
+[[test]]
+name = "derive"
+path = "tests/derive.rs"
+required-features = ["derive"]
+
+[[test]]
+name = "derive_compile"
+path = "tests/derive_compile.rs"
+required-features = ["derive"]
+
+[[test]]
+name = "std_subprocess"
+path = "tests/std_subprocess.rs"
+required-features = ["std"]
+
+[[test]]
+name = "registry_external"
+path = "tests/registry_external.rs"
+required-features = ["std"]
+
+[[test]]
+name = "arithmetic_example"
+path = "tests/arithmetic_example.rs"
+required-features = ["std", "derive"]
+
+[[example]]
+name = "arithmetic"
+path = "examples/arithmetic/main.rs"
+required-features = ["std", "derive"]
