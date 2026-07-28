@@ -49,11 +49,11 @@ fix: ## Runs Fix with configs
 
 .PHONY: format
 format: ## Runs Format
-	cargo fmt --all
+	cargo +nightly fmt --all
 
 .PHONY: format-check
 format-check: ## Runs Format in check mode
-	cargo fmt --all --check
+	cargo +nightly fmt --all --check
 
 .PHONY: lint
 lint: format fix clippy ## Runs all linting tasks at once
