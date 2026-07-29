@@ -185,15 +185,25 @@ impl OwnedDiagnostic {
     }
 
     pub fn is<T: 'static>(&self) -> bool {
-        self.inner.as_any().is::<T>()
+        let any = self.inner.as_any();
+        any.is::<T>() || any.is::<DiagnosticError<T>>()
     }
 
     pub fn downcast_ref<T: 'static>(&self) -> Option<&T> {
-        self.inner.as_any().downcast_ref()
+        if let Some(t) = self.inner.as_any().downcast_ref::<T>() {
+            Some(t)
+        } else {
+            self.inner.as_any().downcast_ref::<DiagnosticError<T>>().map(AsRef::as_ref)
+        }
     }
 
     pub fn downcast_mut<T: 'static>(&mut self) -> Option<&mut T> {
-        self.inner.as_any_mut().downcast_mut()
+        let inner = self.inner.as_any_mut();
+        if inner.is::<T>() {
+            inner.downcast_mut()
+        } else {
+            inner.downcast_mut::<DiagnosticError<T>>().map(AsMut::as_mut)
+        }
     }
 
     pub fn downcast<T: 'static>(self) -> Result<Box<T>, Self> {
@@ -208,6 +218,12 @@ impl OwnedDiagnostic {
                 .into_any()
                 .downcast()
                 .expect("type was checked before consuming owned diagnostic"))
+        } else if inner.as_any().is::<DiagnosticError<T>>() {
+            let diagnostic_error = inner
+                .into_any()
+                .downcast::<DiagnosticError<T>>()
+                .expect("type was checked before consuming owned diagnostic");
+            Ok(Box::new(diagnostic_error.0))
         } else {
             Err(Self {
                 inner,
@@ -291,6 +307,10 @@ impl Report {
     pub fn from_diagnostic(mut diagnostic: OwnedDiagnostic) -> Self {
         diagnostic.set_severity_override(Some(Severity::Error));
         Self { inner: diagnostic }
+    }
+
+    pub fn from_error<E: core::error::Error + Send + Sync + 'static>(error: E) -> Self {
+        Self::new(DiagnosticError(error))
     }
 
     pub fn as_diagnostic(&self) -> &dyn Diagnostic {
@@ -409,6 +429,54 @@ impl core::error::Error for Report {
 impl From<Report> for OwnedDiagnostic {
     fn from(report: Report) -> Self {
         report.into_diagnostic()
+    }
+}
+
+impl<T: Diagnostic + Send + Sync + 'static> From<T> for Report {
+    fn from(value: T) -> Self {
+        Report::new(value)
+    }
+}
+
+/// Convenience [`Diagnostic`] that can be used as an "anonymous" wrapper for
+/// Errors. This is intended to be paired with [`IntoDiagnostic`].
+#[derive(Debug)]
+#[repr(transparent)]
+struct DiagnosticError<T>(T);
+
+impl<T> AsRef<T> for DiagnosticError<T> {
+    #[inline(always)]
+    fn as_ref(&self) -> &T {
+        &self.0
+    }
+}
+
+impl<T> AsMut<T> for DiagnosticError<T> {
+    #[inline(always)]
+    fn as_mut(&mut self) -> &mut T {
+        &mut self.0
+    }
+}
+
+impl<T: fmt::Display> fmt::Display for DiagnosticError<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl<T: core::error::Error> core::error::Error for DiagnosticError<T> {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        self.0.source()
+    }
+}
+
+impl<T: core::error::Error + 'static> Diagnostic for DiagnosticError<T> {
+    fn message(&self, out: &mut dyn fmt::Write) -> fmt::Result {
+        out.write_fmt(format_args!("{}", self.0))
+    }
+
+    fn cause(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        self.0.source()
     }
 }
 

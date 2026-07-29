@@ -95,6 +95,7 @@ pub struct DiagnosticSnapshot {
     pub causes: Vec<OwnedCause>,
     pub diagnostic_source: Option<Box<DiagnosticSnapshot>>,
     pub related: Vec<DiagnosticSnapshot>,
+    /// Propagation contexts ordered from the outermost frame to the innermost.
     pub contexts: Vec<String>,
 }
 
@@ -362,7 +363,7 @@ fn prepare_root(
         0,
         None,
     )?;
-    for context in contexts {
+    for context in contexts.iter().rev() {
         state.add_item()?;
         snapshot
             .contexts

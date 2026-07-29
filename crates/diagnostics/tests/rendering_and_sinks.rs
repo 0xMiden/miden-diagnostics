@@ -14,7 +14,7 @@ use miden_diagnostics::{
     OwnedNote, OwnedSuggestion, OwnedTextEdit, PreparationItemKind, PreparationLimits,
     PrepareError, PreparedDiagnostic, RenderConfig, RenderError, Severity, Source, SourceId,
     SourceKey, SourceMap, SourceNamespace, SourceProvider, SourceRevision, SourceSpan, Suggestion,
-    TextEdit, TextRange, VisitDiagnostic, prepare_ref, prepare_ref_with_limits,
+    TextEdit, TextRange, VisitDiagnostic, WrapErr, prepare_ref, prepare_ref_with_limits,
 };
 #[cfg(feature = "std")]
 use miden_diagnostics::{EmissionStatus, IoEmissionError, IoEmitter};
@@ -581,6 +581,37 @@ fn set_preparation_uses_stored_metadata_and_stable_ids_repeatably() {
     assert_eq!(first.code, None);
     assert!(first.tags.is_empty());
     assert_eq!(first.contexts, ["outer context"]);
+}
+
+#[test]
+fn prepared_contexts_are_presented_outermost_first_without_reordering_storage() {
+    let report = Err::<(), _>(Unlocated("failed"))
+        .wrap_err("inner context")
+        .wrap_err("outer context")
+        .unwrap_err();
+    assert_eq!(
+        report.contexts().iter().map(|context| context.message()).collect::<Vec<_>>(),
+        ["inner context", "outer context"]
+    );
+
+    let report_debug = std::format!("{report:?}");
+    let outer = report_debug.find("context: outer context").unwrap();
+    let inner = report_debug.find("context: inner context").unwrap();
+    assert!(outer < inner, "outer context must precede inner context:\n{report_debug}");
+
+    let mut collector = DiagnosticCollector::new();
+    collector.add_owned(report.into_diagnostic());
+    let set = collector.finish();
+    let sources = SourceMap::new(SourceNamespace(11));
+    let prepared = set.prepare(&sources).unwrap();
+    let diagnostic = prepared.iter().next().unwrap();
+
+    assert_eq!(diagnostic.snapshot.contexts, ["outer context", "inner context"]);
+
+    let rendered = AnnotateRenderer::default().render(diagnostic).unwrap();
+    let outer = rendered.find("context: outer context").unwrap();
+    let inner = rendered.find("context: inner context").unwrap();
+    assert!(outer < inner, "outer context must render before inner context:\n{rendered}");
 }
 
 #[test]

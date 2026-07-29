@@ -20,6 +20,7 @@ mod owned;
 mod panic_support;
 mod registry;
 mod render;
+mod shims;
 mod snapshot;
 mod source;
 #[cfg(feature = "std")]
@@ -52,6 +53,7 @@ pub use registry::{LookupError, RegistryError, StaticRegistry};
 #[cfg(feature = "linked-registry")]
 pub use registry::{RegistryIndex, linked_registry};
 pub use render::{AnnotateRenderer, RenderConfig, RenderError};
+pub use shims::{IntoDiagnostic, WrapErr};
 pub use snapshot::{
     DiagnosticCodeOwned, DiagnosticRelation, DiagnosticSnapshot, OwnedCause, OwnedLabel, OwnedNote,
     OwnedSuggestion, OwnedTextEdit, PreparationItemKind, PreparationLimits, PrepareError,
