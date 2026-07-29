@@ -95,7 +95,6 @@ fn build_example(target: &Path) {
         .arg(manifest)
         .args([
             "--locked",
-            "--offline",
             "--no-default-features",
             "--features",
             "std,derive",

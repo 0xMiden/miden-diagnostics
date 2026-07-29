@@ -258,7 +258,7 @@ fn build_fixture(manifest: &Path, target: &Path, release: bool) {
     command
         .args(["build", "--color=never", "--manifest-path"])
         .arg(manifest)
-        .args(["--locked", "--offline"])
+        .args(["--locked"])
         .env("CARGO_TARGET_DIR", target);
     if release {
         command.args(["--bin", "panic-hook", "--release"]);
