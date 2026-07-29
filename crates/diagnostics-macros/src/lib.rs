@@ -677,7 +677,20 @@ fn resolve_runtime_path(explicit: Option<Path>) -> syn::Result<TokenStream2> {
         return Ok(quote!(#path));
     }
     match crate_name("miden-diagnostics") {
-        Ok(FoundCrate::Itself) => Ok(quote!(crate)),
+        Ok(FoundCrate::Itself) => {
+            // When compiling examples, `crate::` refers to the example crate, not miden-diagnostics,
+            // but crate_name returns Itself because the example shares its Cargo.toml with the
+            // miden-diagnostics crate. We check these env vars to distinguish when we can actually
+            // use `crate` to refer to `miden-diagnostics` and when we can't
+            let is_example_or_integration_test = std::env::var("CARGO_PKG_NAME")
+                .is_ok_and(|name| name == "miden-diagnostics")
+                && std::env::var("CARGO_CRATE_NAME").is_ok_and(|name| name != "miden-diagnostics");
+            if is_example_or_integration_test {
+                Ok(quote!(::miden_diagnostics))
+            } else {
+                Ok(quote!(crate))
+            }
+        }
         Ok(FoundCrate::Name(name)) => {
             let name = Ident::new(&name, Span::call_site());
             Ok(quote!(::#name))

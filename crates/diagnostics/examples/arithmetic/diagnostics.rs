@@ -52,7 +52,6 @@ pub static REGISTRY: StaticRegistry<'static> = StaticRegistry::from_slices(CATAL
 
 #[derive(Debug, Diagnostic)]
 #[diagnostic(
-    crate = miden_diagnostics,
     descriptor = E0001,
     message = "unexpected character `{character}`",
     help = "expected a decimal integer, an operator, or parentheses"
@@ -65,7 +64,6 @@ pub struct UnexpectedCharacter {
 
 #[derive(Debug, Diagnostic)]
 #[diagnostic(
-    crate = miden_diagnostics,
     descriptor = E0002,
     message = "integer literal `{literal}` is outside the supported range"
 )]
@@ -77,7 +75,6 @@ pub struct IntegerOutOfRange {
 
 #[derive(Debug, Diagnostic)]
 #[diagnostic(
-    crate = miden_diagnostics,
     descriptor = W0001,
     message = "integer literal `{literal}` has redundant leading zeros"
 )]
@@ -96,7 +93,6 @@ pub struct LeadingZeros {
 
 #[derive(Debug, Diagnostic)]
 #[diagnostic(
-    crate = miden_diagnostics,
     descriptor = E1001,
     message = "expected an expression, found {found}"
 )]
@@ -108,7 +104,6 @@ pub struct ExpectedExpression {
 
 #[derive(Debug, Diagnostic)]
 #[diagnostic(
-    crate = miden_diagnostics,
     descriptor = E1002,
     message = "parenthesized expression is missing its closing `)`"
 )]
@@ -127,7 +122,6 @@ pub struct UnclosedParenthesis {
 
 #[derive(Debug, Diagnostic)]
 #[diagnostic(
-    crate = miden_diagnostics,
     descriptor = E1003,
     message = "unexpected token {found} after the expression"
 )]
@@ -139,7 +133,6 @@ pub struct UnexpectedTrailingToken {
 
 #[derive(Debug, Diagnostic)]
 #[diagnostic(
-    crate = miden_diagnostics,
     descriptor = E2001,
     message = "cannot divide by zero",
     help = "change the divisor so that it evaluates to a nonzero value"
@@ -151,7 +144,6 @@ pub struct DivisionByZero {
 
 #[derive(Debug, Diagnostic)]
 #[diagnostic(
-    crate = miden_diagnostics,
     descriptor = E2002,
     message = "{operation} overflows the i64 range"
 )]
