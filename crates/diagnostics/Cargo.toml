@@ -24,7 +24,7 @@ linked-registry = ["std", "dep:inventory"]
 [dependencies]
 annotate-snippets = { version = "=0.12.16", default-features = false }
 inventory = { version = "=0.3.24", optional = true }
-miden-diagnostics-macros = { path = "../diagnostics-macros", optional = true }
+miden-diagnostics-macros = { version = "1.0.0-alpha.1", path = "../diagnostics-macros", optional = true }
 
 [dev-dependencies]
 annotate-snippets = { version = "=0.12.16", default-features = false, features = ["testing-colors"] }

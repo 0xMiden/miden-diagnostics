@@ -10,7 +10,6 @@ fn run_cargo(manifest: &Path, target_dir: &Path, arguments: &[&str]) -> Output {
         .args(arguments)
         .arg("--manifest-path")
         .arg(manifest)
-        .args(["--locked"])
         .env("CARGO_TARGET_DIR", target_dir);
     command.output().expect("fixture cargo command must launch")
 }

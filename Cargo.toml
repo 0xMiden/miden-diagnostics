@@ -6,7 +6,7 @@ members = [
 ]
 
 [workspace.package]
-version = "1.0.0"
+version = "1.0.0-alpha.1"
 authors = ["miden contributors"]
 description = "Diagnostics infrastructure for Miden tooling"
 repository = "https://github.com/0xMiden/miden-diagnostics"

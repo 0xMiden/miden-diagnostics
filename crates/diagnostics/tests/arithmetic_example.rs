@@ -93,14 +93,7 @@ fn build_example(target: &Path) {
     let output = Command::new(env!("CARGO"))
         .args(["build", "--color=never", "--manifest-path"])
         .arg(manifest)
-        .args([
-            "--locked",
-            "--no-default-features",
-            "--features",
-            "std,derive",
-            "--example",
-            "arithmetic",
-        ])
+        .args(["--no-default-features", "--features", "std,derive", "--example", "arithmetic"])
         .env("CARGO_TARGET_DIR", target)
         .output()
         .expect("arithmetic example build must launch");

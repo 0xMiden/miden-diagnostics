@@ -27,7 +27,7 @@ fn cargo_build(package: &str, variant: &str, target: Option<&str>, features: &[&
     command
         .args(["build", "--manifest-path"])
         .arg(&manifest)
-        .args(["--release", "--locked", "--no-default-features", "-p", package])
+        .args(["--release", "--no-default-features", "-p", package])
         .env("CARGO_TARGET_DIR", &target_dir);
     if let Some(target) = target {
         command.args(["--target", target]);

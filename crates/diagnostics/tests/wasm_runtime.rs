@@ -23,7 +23,6 @@ fn linked_no_std_wasm_executes_with_wasmi() {
             "--target",
             "wasm32-unknown-unknown",
             "--release",
-            "--locked",
         ])
         .env("CARGO_TARGET_DIR", &target_dir)
         .output()
