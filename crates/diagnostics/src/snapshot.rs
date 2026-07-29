@@ -290,12 +290,19 @@ pub fn prepare_ref_with_limits(
 pub(crate) fn prepare_owned_ref(
     diagnostic: &OwnedDiagnostic,
 ) -> Result<DiagnosticSnapshot, PrepareError> {
+    prepare_owned_ref_with_limits(diagnostic, PreparationLimits::default())
+}
+
+pub(crate) fn prepare_owned_ref_with_limits(
+    diagnostic: &OwnedDiagnostic,
+    limits: PreparationLimits,
+) -> Result<DiagnosticSnapshot, PrepareError> {
     prepare_root(
         diagnostic.as_diagnostic(),
         diagnostic.metadata(),
         None,
         diagnostic.contexts(),
-        PreparationLimits::default(),
+        limits,
     )
 }
 

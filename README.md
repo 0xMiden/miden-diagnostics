@@ -159,6 +159,26 @@ prepare a `DiagnosticSet` with a `SourceProvider`, then pass the resulting
 `PreparedSet` to `FmtEmitter`, `IoEmitter`, or a custom `Emitter`.
 Preparation snapshots all semantic data before presentation.
 
+To rich-render a single `OwnedDiagnostic` or `Report`, use its borrowing
+display adapter. Sources attached to the diagnostic are used automatically;
+session spans require an explicit session source provider:
+
+```rust
+println!("{}", report.display());
+
+println!(
+    "{}",
+    report
+        .display_with_sources(&sources)
+        .with_config(miden_diagnostics::TerminalPolicy::default().resolve_stdout()),
+);
+```
+
+The adapter's normal `Display` implementation safely degrades preparation or
+rendering failures. Use `.try_render()` when those failures must remain
+observable. Ordinary `Report::Display` stays concise for error chains, logs,
+and `Error::to_string()`.
+
 ## Register and explain diagnostic codes
 
 Diagnostic registration provides a mechanism for a few useful features:

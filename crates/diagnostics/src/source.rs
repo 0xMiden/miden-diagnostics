@@ -200,6 +200,8 @@ pub trait SourceProvider {
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct EmptySourceProvider;
 
+pub(crate) static EMPTY_SOURCE_PROVIDER: EmptySourceProvider = EmptySourceProvider;
+
 impl SourceProvider for EmptySourceProvider {
     fn get(&self, _id: SourceId) -> Option<Source<'_>> {
         None

@@ -3,13 +3,55 @@ use core::{any::Any, fmt};
 
 use crate::{
     AnnotateRenderer, Diagnostic, DiagnosticCodeRef, DiagnosticDescriptor, DiagnosticMetadata,
-    DiagnosticTag, LayeredSourceProvider, PreparedDiagnostic, RenderConfig, Severity,
-    SourceProvider, diagnostic::DiagnosticMessage, emit::render_or_degrade,
-    snapshot::prepare_owned_ref, source::EmptySourceProvider,
+    DiagnosticTag, LayeredSourceProvider, PreparationLimits, PrepareError, PreparedDiagnostic,
+    RenderConfig, RenderError, Severity, SourceProvider,
+    diagnostic::DiagnosticMessage,
+    emit::render_or_degrade,
+    snapshot::{prepare_owned_ref, prepare_owned_ref_with_limits},
+    source::EMPTY_SOURCE_PROVIDER,
 };
 
 const REPORT_PREPARATION_FALLBACK: &str =
     "error: diagnostic preparation failed; rich output unavailable";
+
+/// A failure while preparing or rendering one owned diagnostic.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DiagnosticRenderError {
+    /// Snapshot preparation failed.
+    Prepare(PrepareError),
+    /// Rendering a prepared snapshot failed.
+    Render(RenderError),
+}
+
+impl fmt::Display for DiagnosticRenderError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Prepare(error) => write!(formatter, "diagnostic preparation failed: {error}"),
+            Self::Render(error) => write!(formatter, "diagnostic rendering failed: {error}"),
+        }
+    }
+}
+
+impl core::error::Error for DiagnosticRenderError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Prepare(error) => Some(error),
+            Self::Render(error) => Some(error),
+        }
+    }
+}
+
+impl From<PrepareError> for DiagnosticRenderError {
+    fn from(error: PrepareError) -> Self {
+        Self::Prepare(error)
+    }
+}
+
+impl From<RenderError> for DiagnosticRenderError {
+    fn from(error: RenderError) -> Self {
+        Self::Render(error)
+    }
+}
 
 trait ErasedDiagnostic: Diagnostic + Send + Sync + 'static {
     fn diagnostic(&self) -> &dyn Diagnostic;
@@ -184,6 +226,62 @@ impl OwnedDiagnostic {
         self.attached_sources.as_deref()
     }
 
+    /// Prepares this diagnostic with its occurrence metadata and source universes.
+    ///
+    /// `session_sources` resolves [`crate::SourceKey::Session`] spans. Sources
+    /// attached to this diagnostic continue to resolve
+    /// [`crate::SourceKey::Attached`] spans without fallback between the two
+    /// namespaces.
+    pub fn prepare<'a>(
+        &'a self,
+        session_sources: &'a dyn SourceProvider,
+    ) -> Result<PreparedDiagnostic<'a>, PrepareError> {
+        let snapshot = prepare_owned_ref(self)?;
+        Ok(self.prepared(snapshot, session_sources))
+    }
+
+    /// Prepares this diagnostic with explicit resource limits.
+    pub fn prepare_with_limits<'a>(
+        &'a self,
+        session_sources: &'a dyn SourceProvider,
+        limits: PreparationLimits,
+    ) -> Result<PreparedDiagnostic<'a>, PrepareError> {
+        let snapshot = prepare_owned_ref_with_limits(self, limits)?;
+        Ok(self.prepared(snapshot, session_sources))
+    }
+
+    /// Prepares this diagnostic using only sources attached to it.
+    ///
+    /// Rendering a session span in the returned diagnostic will produce a
+    /// missing-source error.
+    pub fn prepare_attached(&self) -> Result<PreparedDiagnostic<'_>, PrepareError> {
+        self.prepare(&EMPTY_SOURCE_PROVIDER)
+    }
+
+    /// Prepares this diagnostic using only attached sources and explicit limits.
+    pub fn prepare_attached_with_limits(
+        &self,
+        limits: PreparationLimits,
+    ) -> Result<PreparedDiagnostic<'_>, PrepareError> {
+        self.prepare_with_limits(&EMPTY_SOURCE_PROVIDER, limits)
+    }
+
+    /// Returns a rich-formatting adapter using attached sources and portable defaults.
+    pub fn display(&self) -> DiagnosticDisplay<'_> {
+        DiagnosticDisplay::new(self, &EMPTY_SOURCE_PROVIDER)
+    }
+
+    /// Returns a rich-formatting adapter with an explicit session source provider.
+    ///
+    /// Sources attached to this diagnostic are layered with `session_sources`
+    /// and remain scoped to attached spans.
+    pub fn display_with_sources<'a>(
+        &'a self,
+        session_sources: &'a dyn SourceProvider,
+    ) -> DiagnosticDisplay<'a> {
+        DiagnosticDisplay::new(self, session_sources)
+    }
+
     pub fn is<T: 'static>(&self) -> bool {
         let any = self.inner.as_any();
         any.is::<T>() || any.is::<DiagnosticError<T>>()
@@ -233,6 +331,18 @@ impl OwnedDiagnostic {
             })
         }
     }
+
+    fn prepared<'a>(
+        &'a self,
+        snapshot: crate::DiagnosticSnapshot,
+        session_sources: &'a dyn SourceProvider,
+    ) -> PreparedDiagnostic<'a> {
+        let attached = self.attached_sources().map(|sources| sources as &dyn SourceProvider);
+        PreparedDiagnostic {
+            snapshot,
+            sources: LayeredSourceProvider::new(session_sources, attached),
+        }
+    }
 }
 
 impl fmt::Display for OwnedDiagnostic {
@@ -251,6 +361,65 @@ impl fmt::Debug for OwnedDiagnostic {
             .field("contexts", &self.contexts)
             .field("has_attached_sources", &self.attached_sources.is_some())
             .finish()
+    }
+}
+
+/// A borrowing adapter for rich formatting of one owned diagnostic.
+///
+/// The adapter uses deterministic [`RenderConfig::DEFAULT`] settings unless
+/// configured otherwise. Its [`fmt::Display`] implementation degrades
+/// preparation and rendering failures to safe text; use [`Self::try_render`]
+/// when those failures must remain observable.
+#[derive(Clone, Copy)]
+#[must_use = "a diagnostic display adapter must be formatted or rendered"]
+pub struct DiagnosticDisplay<'a> {
+    diagnostic: &'a OwnedDiagnostic,
+    session_sources: &'a dyn SourceProvider,
+    config: RenderConfig,
+}
+
+impl<'a> DiagnosticDisplay<'a> {
+    const fn new(diagnostic: &'a OwnedDiagnostic, session_sources: &'a dyn SourceProvider) -> Self {
+        Self {
+            diagnostic,
+            session_sources,
+            config: RenderConfig::DEFAULT,
+        }
+    }
+
+    /// Replaces the renderer configuration used by this adapter.
+    pub const fn with_config(mut self, config: RenderConfig) -> Self {
+        self.config = config;
+        self
+    }
+
+    /// Returns the renderer configuration used by this adapter.
+    pub const fn config(&self) -> RenderConfig {
+        self.config
+    }
+
+    /// Strictly prepares and renders this diagnostic.
+    pub fn try_render(&self) -> Result<String, DiagnosticRenderError> {
+        let diagnostic = self
+            .diagnostic
+            .prepare(self.session_sources)
+            .map_err(DiagnosticRenderError::Prepare)?;
+        AnnotateRenderer::new(self.config)
+            .render(&diagnostic)
+            .map_err(DiagnosticRenderError::Render)
+    }
+
+    fn render_or_degrade(&self) -> String {
+        let Ok(diagnostic) = self.diagnostic.prepare(self.session_sources) else {
+            return String::from(REPORT_PREPARATION_FALLBACK);
+        };
+        render_or_degrade(&AnnotateRenderer::new(self.config), &diagnostic).0
+    }
+}
+
+impl fmt::Display for DiagnosticDisplay<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.render_or_degrade())
     }
 }
 
@@ -354,6 +523,49 @@ impl Report {
         self.inner.attached_sources()
     }
 
+    /// Prepares this report with its occurrence metadata and source universes.
+    pub fn prepare<'a>(
+        &'a self,
+        session_sources: &'a dyn SourceProvider,
+    ) -> Result<PreparedDiagnostic<'a>, PrepareError> {
+        self.inner.prepare(session_sources)
+    }
+
+    /// Prepares this report with explicit resource limits.
+    pub fn prepare_with_limits<'a>(
+        &'a self,
+        session_sources: &'a dyn SourceProvider,
+        limits: PreparationLimits,
+    ) -> Result<PreparedDiagnostic<'a>, PrepareError> {
+        self.inner.prepare_with_limits(session_sources, limits)
+    }
+
+    /// Prepares this report using only sources attached to it.
+    pub fn prepare_attached(&self) -> Result<PreparedDiagnostic<'_>, PrepareError> {
+        self.inner.prepare_attached()
+    }
+
+    /// Prepares this report using only attached sources and explicit limits.
+    pub fn prepare_attached_with_limits(
+        &self,
+        limits: PreparationLimits,
+    ) -> Result<PreparedDiagnostic<'_>, PrepareError> {
+        self.inner.prepare_attached_with_limits(limits)
+    }
+
+    /// Returns a rich-formatting adapter using attached sources and portable defaults.
+    pub fn display(&self) -> DiagnosticDisplay<'_> {
+        self.inner.display()
+    }
+
+    /// Returns a rich-formatting adapter with an explicit session source provider.
+    pub fn display_with_sources<'a>(
+        &'a self,
+        session_sources: &'a dyn SourceProvider,
+    ) -> DiagnosticDisplay<'a> {
+        self.inner.display_with_sources(session_sources)
+    }
+
     pub fn is<T: 'static>(&self) -> bool {
         self.inner.is::<T>()
     }
@@ -375,19 +587,6 @@ impl Report {
 
     pub fn into_diagnostic(self) -> OwnedDiagnostic {
         self.inner
-    }
-
-    pub(crate) fn render_record(&self, config: RenderConfig) -> String {
-        let Ok(snapshot) = prepare_owned_ref(&self.inner) else {
-            return String::from(REPORT_PREPARATION_FALLBACK);
-        };
-        let session = EmptySourceProvider;
-        let attached = self.inner.attached_sources().map(|sources| sources as &dyn SourceProvider);
-        let diagnostic = PreparedDiagnostic {
-            snapshot,
-            sources: LayeredSourceProvider::new(&session, attached),
-        };
-        render_or_degrade(&AnnotateRenderer::new(config), &diagnostic).0
     }
 }
 
@@ -416,7 +615,7 @@ impl fmt::Display for Report {
 
 impl fmt::Debug for Report {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.render_record(RenderConfig::DEFAULT))
+        fmt::Display::fmt(&self.display(), formatter)
     }
 }
 

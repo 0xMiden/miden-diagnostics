@@ -42,6 +42,11 @@ fn std_runtime_contracts() {
     let rich_repeat = run(&result, ["rich"], []);
     assert_eq!(rich.stderr, rich_repeat.stderr);
 
+    let stdout_emitter = run(&result, ["stdout-emitter"], []);
+    assert!(stdout_emitter.status.success());
+    assert_eq!(text(&stdout_emitter.stdout), RICH_REPORT);
+    assert_eq!(stdout_emitter.stderr, b"");
+
     let missing = run(&result, ["missing-source"], []);
     assert_failure(&missing);
     assert_eq!(

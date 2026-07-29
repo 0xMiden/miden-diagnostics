@@ -22,6 +22,9 @@ The public API is organized around a few layers:
   diagnostic-attached source universes.
 - snapshot preparation validates and owns messages before
   `AnnotateRenderer` and the emitter traits present them.
+- `OwnedDiagnostic::display` and `Report::display` rich-render a single
+  occurrence without consuming it; session spans can be supplied with
+  `display_with_sources`.
 - `StaticRegistry` explicitly composes diagnostic catalogs. The optional
   linked registry provides process-wide diagnostic registration.
 - with the `std` feature enabled, `ExitWithOutcome`, terminal emitters, and 

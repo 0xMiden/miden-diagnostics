@@ -27,7 +27,7 @@ pub enum TerminalWidth {
     Fixed(NonZeroU16),
 }
 
-/// Controls terminal capabilities for stderr rendering.
+/// Controls terminal capabilities for standard-stream rendering.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct TerminalPolicy {
     pub styled: TerminalChoice,
@@ -45,8 +45,20 @@ impl TerminalPolicy {
     };
 
     /// Resolves this policy once against stderr and the current environment.
+    ///
+    /// This is a compatibility alias for [`Self::resolve_stderr`].
     pub fn resolve(self) -> RenderConfig {
-        self.resolve_with(TerminalInputs::detect())
+        self.resolve_stderr()
+    }
+
+    /// Resolves this policy once against stdout and the current environment.
+    pub fn resolve_stdout(self) -> RenderConfig {
+        self.resolve_with(TerminalInputs::detect(io::stdout().is_terminal()))
+    }
+
+    /// Resolves this policy once against stderr and the current environment.
+    pub fn resolve_stderr(self) -> RenderConfig {
+        self.resolve_with(TerminalInputs::detect(io::stderr().is_terminal()))
     }
 
     fn resolve_with(self, inputs: TerminalInputs) -> RenderConfig {
@@ -92,13 +104,12 @@ struct TerminalInputs {
 }
 
 impl TerminalInputs {
-    fn detect() -> Self {
-        let is_terminal = io::stderr().is_terminal();
+    fn detect(is_terminal: bool) -> Self {
         let term_is_dumb =
             env::var_os("TERM").as_deref().is_some_and(|term| eq_ascii_case(term, "dumb"));
         let no_color_requested =
             env::var_os("NO_COLOR").as_deref().is_some_and(|value| !value.is_empty());
-        let unicode_locale = unicode_locale();
+        let unicode_locale = unicode_locale(is_terminal);
         let columns = parse_columns(env::var_os("COLUMNS").as_deref());
         Self {
             is_terminal,
@@ -122,12 +133,12 @@ fn eq_ascii_case(value: &OsStr, expected: &str) -> bool {
 }
 
 #[cfg(windows)]
-fn unicode_locale() -> bool {
-    io::stderr().is_terminal()
+fn unicode_locale(is_terminal: bool) -> bool {
+    is_terminal
 }
 
 #[cfg(not(windows))]
-fn unicode_locale() -> bool {
+fn unicode_locale(_is_terminal: bool) -> bool {
     ["LC_ALL", "LC_CTYPE", "LANG"]
         .into_iter()
         .filter_map(env::var_os)
@@ -147,7 +158,7 @@ pub struct StderrEmitter {
 impl StderrEmitter {
     pub fn new(policy: TerminalPolicy) -> Self {
         Self {
-            renderer: AnnotateRenderer::new(policy.resolve()),
+            renderer: AnnotateRenderer::new(policy.resolve_stderr()),
         }
     }
 
@@ -177,6 +188,48 @@ impl Emitter for StderrEmitter {
     ) -> Result<EmissionSummary, EmissionFailure<Self::Error>> {
         let stderr = io::stderr();
         let lock = stderr.lock();
+        IoEmitter::new(lock, self.renderer).emit_set(diagnostics)
+    }
+}
+
+/// Emits diagnostics to stdout using capabilities resolved at construction.
+pub struct StdoutEmitter {
+    renderer: AnnotateRenderer,
+}
+
+impl StdoutEmitter {
+    pub fn new(policy: TerminalPolicy) -> Self {
+        Self {
+            renderer: AnnotateRenderer::new(policy.resolve_stdout()),
+        }
+    }
+
+    pub const fn renderer(&self) -> &AnnotateRenderer {
+        &self.renderer
+    }
+}
+
+impl Default for StdoutEmitter {
+    fn default() -> Self {
+        Self::new(TerminalPolicy::default())
+    }
+}
+
+impl Emitter for StdoutEmitter {
+    type Error = IoEmissionError;
+
+    fn emit(&mut self, diagnostic: &PreparedDiagnostic<'_>) -> Result<EmissionStatus, Self::Error> {
+        let stdout = io::stdout();
+        let lock = stdout.lock();
+        IoEmitter::new(lock, self.renderer).emit(diagnostic)
+    }
+
+    fn emit_set(
+        &mut self,
+        diagnostics: &PreparedSet<'_>,
+    ) -> Result<EmissionSummary, EmissionFailure<Self::Error>> {
+        let stdout = io::stdout();
+        let lock = stdout.lock();
         IoEmitter::new(lock, self.renderer).emit_set(diagnostics)
     }
 }
@@ -283,5 +336,32 @@ mod tests {
                 ..RenderConfig::DEFAULT
             }
         );
+    }
+
+    #[test]
+    fn resolve_remains_the_stderr_compatibility_alias() {
+        assert_eq!(TerminalPolicy::DEFAULT.resolve(), TerminalPolicy::DEFAULT.resolve_stderr());
+    }
+
+    #[test]
+    fn explicit_policy_resolves_and_constructs_both_standard_stream_emitters() {
+        let policy = TerminalPolicy {
+            styled: TerminalChoice::Always,
+            unicode: TerminalChoice::Never,
+            hyperlinks: TerminalChoice::Always,
+            width: TerminalWidth::Fixed(NonZeroU16::new(88).unwrap()),
+        };
+        let expected = RenderConfig {
+            styled: true,
+            unicode: false,
+            hyperlinks: true,
+            width: 88,
+            ..RenderConfig::DEFAULT
+        };
+
+        assert_eq!(policy.resolve_stdout(), expected);
+        assert_eq!(policy.resolve_stderr(), expected);
+        assert_eq!(StdoutEmitter::new(policy).renderer().config, expected);
+        assert_eq!(StderrEmitter::new(policy).renderer().config, expected);
     }
 }

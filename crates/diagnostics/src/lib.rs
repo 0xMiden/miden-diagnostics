@@ -46,7 +46,7 @@ pub use diagnostic::{
 pub use emit::{EmissionFailure, EmissionStatus, EmissionSummary, Emitter, FmtEmitter};
 #[cfg(feature = "std")]
 pub use emit::{IoEmissionError, IoEmitter};
-pub use owned::{ContextFrame, OwnedDiagnostic, Report};
+pub use owned::{ContextFrame, DiagnosticDisplay, DiagnosticRenderError, OwnedDiagnostic, Report};
 #[cfg(feature = "std")]
 pub use panic_support::{InstallHookError, PanicHookOptions, install_panic_hook};
 pub use registry::{LookupError, RegistryError, StaticRegistry};
@@ -65,7 +65,7 @@ pub use source::{
     TextRangeError,
 };
 #[cfg(feature = "std")]
-pub use terminal::{StderrEmitter, TerminalChoice, TerminalPolicy, TerminalWidth};
+pub use terminal::{StderrEmitter, StdoutEmitter, TerminalChoice, TerminalPolicy, TerminalWidth};
 
 pub type Result<T, E = Report> = core::result::Result<T, E>;
 

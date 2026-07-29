@@ -9,12 +9,13 @@ use std::{rc::Rc, string::String, sync::Arc, vec, vec::Vec};
 use miden_diagnostics::{
     AnnotateRenderer, Applicability, DescriptorOrigin, Diagnostic, DiagnosticCode,
     DiagnosticCodeOwned, DiagnosticCollector, DiagnosticDescriptor, DiagnosticRelation,
-    DiagnosticSnapshot, DiagnosticTag, Emitter, Explanation, FmtEmitter, Label, LabelStyle,
-    LayeredSourceProvider, LineColumn, Note, NoteKind, OwnedCause, OwnedDiagnostic, OwnedLabel,
-    OwnedNote, OwnedSuggestion, OwnedTextEdit, PreparationItemKind, PreparationLimits,
-    PrepareError, PreparedDiagnostic, RenderConfig, RenderError, Severity, Source, SourceId,
-    SourceKey, SourceMap, SourceNamespace, SourceProvider, SourceRevision, SourceSpan, Suggestion,
-    TextEdit, TextRange, VisitDiagnostic, WrapErr, prepare_ref, prepare_ref_with_limits,
+    DiagnosticRenderError, DiagnosticSnapshot, DiagnosticTag, Emitter, Explanation, FmtEmitter,
+    Label, LabelStyle, LayeredSourceProvider, LineColumn, Note, NoteKind, OwnedCause,
+    OwnedDiagnostic, OwnedLabel, OwnedNote, OwnedSuggestion, OwnedTextEdit, PreparationItemKind,
+    PreparationLimits, PrepareError, PreparedDiagnostic, RenderConfig, RenderError, Report,
+    Severity, Source, SourceId, SourceKey, SourceMap, SourceNamespace, SourceProvider,
+    SourceRevision, SourceSpan, Suggestion, TextEdit, TextRange, VisitDiagnostic, WrapErr,
+    prepare_ref, prepare_ref_with_limits,
 };
 #[cfg(feature = "std")]
 use miden_diagnostics::{EmissionStatus, IoEmissionError, IoEmitter};
@@ -715,7 +716,7 @@ impl Diagnostic for RichDiagnostic {
     }
 }
 
-fn rich_prepared() -> (SourceMap, miden_diagnostics::DiagnosticSet, SourceId, SourceId) {
+fn rich_owned() -> (SourceMap, OwnedDiagnostic, SourceId, SourceId) {
     let mut session = SourceMap::new(SourceNamespace(20));
     let session_id =
         session.insert("same.masm", "fn main() {}\n", Some(SourceRevision(7))).unwrap();
@@ -728,13 +729,155 @@ fn rich_prepared() -> (SourceMap, miden_diagnostics::DiagnosticSet, SourceId, So
         related: ChildDiagnostic("related message"),
         cause: CauseError,
     };
+    let diagnostic = OwnedDiagnostic::new(diagnostic)
+        .with_context("while parsing module")
+        .attach_sources(attached);
+    (session, diagnostic, session_id, attached_id)
+}
+
+fn rich_prepared() -> (SourceMap, miden_diagnostics::DiagnosticSet, SourceId, SourceId) {
+    let (session, diagnostic, session_id, attached_id) = rich_owned();
     let mut collector = DiagnosticCollector::new();
-    collector.add_owned(
-        OwnedDiagnostic::new(diagnostic)
-            .with_context("while parsing module")
-            .attach_sources(attached),
-    );
+    collector.add_owned(diagnostic);
     (session, collector.finish(), session_id, attached_id)
+}
+
+#[test]
+fn owned_preparation_preserves_occurrence_metadata_and_source_routing() {
+    let sources = SourceMap::new(SourceNamespace(19));
+    let owned = OwnedDiagnostic::new(Unlocated("warning occurrence"))
+        .with_severity_override(Severity::Warning)
+        .with_context("outer context");
+    let prepared = owned.prepare(&sources).unwrap();
+    assert_eq!(prepared.snapshot.severity, Severity::Warning);
+    assert_eq!(prepared.snapshot.contexts, ["outer context"]);
+
+    let report = Report::from_diagnostic(owned);
+    let prepared = report.prepare(&sources).unwrap();
+    assert_eq!(prepared.snapshot.severity, Severity::Error);
+    assert_eq!(prepared.snapshot.contexts, ["outer context"]);
+
+    let (session, owned, session_id, attached_id) = rich_owned();
+    assert_eq!(session_id, attached_id);
+    let prepared = owned.prepare(&session).unwrap();
+    let rendered = AnnotateRenderer::default().render(&prepared).unwrap();
+    assert!(rendered.contains("fn main() {}"));
+    assert!(rendered.contains("var value = 1"));
+
+    let attached_only = owned.prepare_attached().unwrap();
+    assert_eq!(
+        AnnotateRenderer::default().render(&attached_only),
+        Err(RenderError::MissingSource(SourceKey::Session(session_id)))
+    );
+}
+
+#[test]
+fn diagnostic_display_renders_borrowed_owned_and_report_values() {
+    let (session, owned, ..) = rich_owned();
+    let adapter = owned.display_with_sources(&session);
+    assert_eq!(adapter.config(), RenderConfig::DEFAULT);
+
+    let rendered = adapter.try_render().unwrap();
+    assert_eq!(rendered, format!("{adapter}"));
+    assert!(rendered.contains("fn main() {}"));
+    assert!(rendered.contains("var value = 1"));
+    assert!(rendered.contains("while parsing module"));
+    assert!(owned.downcast_ref::<RichDiagnostic>().is_some());
+
+    let short = adapter
+        .with_config(RenderConfig {
+            short: true,
+            ..RenderConfig::DEFAULT
+        })
+        .try_render()
+        .unwrap();
+    assert!(short.contains("unexpected token"));
+    assert!(!short.contains("apply both edits"));
+    assert!(!short.contains("related message"));
+
+    let report = Report::new(Unlocated("operation failed")).context("while running");
+    assert_eq!(report.to_string(), "operation failed");
+    assert_eq!(format!("{}", report.display()), format!("{report:?}"));
+    assert!(format!("{}", report.display()).contains("context: while running"));
+}
+
+#[test]
+fn diagnostic_display_has_strict_errors_and_safe_degradation() {
+    let formatting_failure = OwnedDiagnostic::new(FormattingFailure);
+    assert_eq!(
+        formatting_failure.display().try_render(),
+        Err(DiagnosticRenderError::Prepare(PrepareError::MessageFormatting))
+    );
+    assert_eq!(
+        format!("{}", formatting_failure.display()),
+        "error: diagnostic preparation failed; rich output unavailable"
+    );
+
+    let namespace = SourceNamespace(21);
+    let missing_id = SourceId::new(namespace, 0);
+    let missing =
+        OwnedDiagnostic::new(MissingLocated(SourceSpan::session(missing_id, range(0, 0))));
+    assert_eq!(
+        missing.display().try_render(),
+        Err(DiagnosticRenderError::Render(RenderError::MissingSource(SourceKey::Session(
+            missing_id
+        ))))
+    );
+    assert_eq!(
+        format!("{}", missing.display()),
+        "error: missing location\nnote: diagnostic rendering degraded: missing source"
+    );
+
+    let invalid_width_diagnostic = OwnedDiagnostic::new(Unlocated("invalid width"));
+    let invalid_width = invalid_width_diagnostic.display().with_config(RenderConfig {
+        width: 0,
+        ..RenderConfig::DEFAULT
+    });
+    assert_eq!(
+        invalid_width.try_render(),
+        Err(DiagnosticRenderError::Render(RenderError::InvalidWidth { width: 0 }))
+    );
+    assert_eq!(
+        format!("{invalid_width}"),
+        "error: invalid width\nnote: diagnostic rendering degraded: invalid render width"
+    );
+}
+
+#[test]
+fn attached_display_and_explicit_preparation_limits_are_supported() {
+    let mut attached = SourceMap::new(SourceNamespace(22));
+    let id = attached.insert("attached.masm", "bad token", None).unwrap();
+    let owned = OwnedDiagnostic::new(MissingLocated(SourceSpan::attached(id, range(0, 3))))
+        .attach_sources(attached);
+    let rendered = owned.display().try_render().unwrap();
+    assert!(rendered.contains("attached.masm"));
+    assert!(rendered.contains("bad token"));
+
+    let report = Report::from_diagnostic(owned);
+    let rendered = AnnotateRenderer::default().render(&report.prepare_attached().unwrap()).unwrap();
+    assert!(rendered.contains("attached.masm"));
+
+    let limits = PreparationLimits {
+        max_item_text_bytes: 3,
+        ..PreparationLimits::DEFAULT
+    };
+    assert!(matches!(
+        OwnedDiagnostic::new(Unlocated("long")).prepare_attached_with_limits(limits),
+        Err(PrepareError::ItemTooLarge {
+            item: PreparationItemKind::Message,
+            bytes: 4,
+            limit: 3,
+        })
+    ));
+    let sources = SourceMap::new(SourceNamespace(23));
+    assert!(matches!(
+        Report::new(Unlocated("long")).prepare_with_limits(&sources, limits),
+        Err(PrepareError::ItemTooLarge {
+            item: PreparationItemKind::Message,
+            bytes: 4,
+            limit: 3,
+        })
+    ));
 }
 
 #[test]

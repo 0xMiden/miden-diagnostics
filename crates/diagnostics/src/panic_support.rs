@@ -1,5 +1,8 @@
 #[cfg(feature = "std")]
-use alloc::{boxed::Box, string::String};
+use alloc::{
+    boxed::Box,
+    string::{String, ToString},
+};
 #[cfg(feature = "std")]
 use core::{cell::Cell, fmt};
 #[cfg(feature = "std")]
@@ -177,7 +180,8 @@ pub fn panic_report(report: Report) -> ! {
 
     let installed = installed_options();
     let options = installed.unwrap_or_default();
-    let mut framed_record = report.render_record(options.terminal_policy.resolve());
+    let mut framed_record =
+        report.display().with_config(options.terminal_policy.resolve()).to_string();
     framed_record.push('\n');
     match installed {
         Some(_) => panic::panic_any(ReportPanic {
