@@ -135,7 +135,7 @@ impl SourceFile {
             .line_start(line_index)
             .map_err(|_| Error::IndexTooLarge {
                 given: byte_index.to_usize(),
-                max: self.source().len() - 1,
+                max: self.source().len(),
             })?;
         let line_src = self
             .source
@@ -143,7 +143,7 @@ impl SourceFile {
             .get(line_start_index.to_usize()..byte_index.to_usize())
             .ok_or_else(|| {
                 let given = byte_index.to_usize();
-                let max = self.source().len() - 1;
+                let max = self.source().len();
                 if given >= max {
                     Error::IndexTooLarge { given, max }
                 } else {
@@ -181,11 +181,47 @@ impl SourceFile {
         let end = span.end;
 
         self.source().get(start..end).ok_or_else(|| {
-            let max = self.source().len() - 1;
+            let max = self.source().len();
             Error::IndexTooLarge {
                 given: if start > max { start } else { end },
                 max,
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_source_file() -> SourceFile {
+        SourceFile::new(
+            SourceId::new(1),
+            FileName::virtual_("empty"),
+            String::new(),
+            None,
+        )
+    }
+
+    #[test]
+    fn location_returns_error_for_empty_source_file() {
+        let file = empty_source_file();
+
+        let err = file
+            .location(1u32)
+            .expect_err("empty file location should be out of bounds");
+
+        assert!(matches!(err, Error::IndexTooLarge { given: 1, max: 0 }));
+    }
+
+    #[test]
+    fn source_slice_returns_error_for_empty_source_file() {
+        let file = empty_source_file();
+
+        let err = file
+            .source_slice(0..1)
+            .expect_err("empty file slice should be out of bounds");
+
+        assert!(matches!(err, Error::IndexTooLarge { given: 1, max: 0 }));
     }
 }
