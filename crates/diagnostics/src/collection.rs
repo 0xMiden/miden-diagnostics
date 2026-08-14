@@ -5,7 +5,7 @@ mod limits;
 #[cfg(test)]
 mod tests;
 
-use alloc::{boxed::Box, string::String, vec, vec::Vec};
+use alloc::{boxed::Box, string::String, sync::Arc, vec, vec::Vec};
 use core::slice;
 
 pub use self::{
@@ -17,7 +17,7 @@ pub use self::{
 use self::{diagnostic_set::DiagnosticMetadataSnapshot, limits::LimitReachedDiagnostic};
 use crate::{
     Diagnostic, DiagnosticCodeRef, DiagnosticDescriptor, DiagnosticMetadata, DiagnosticTag,
-    OwnedDiagnostic, Report, Severity,
+    OwnedDiagnostic, Report, Severity, SourceProvider,
 };
 
 /// An [Outcome] represents the output of a computation and the set of diagnostics that were

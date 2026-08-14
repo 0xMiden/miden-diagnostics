@@ -18,6 +18,10 @@ name = "reject-primary-shape"
 path = "src/bin/reject-primary-shape.rs"
 
 [[bin]]
+name = "reject-spanned-shape"
+path = "src/bin/reject-spanned-shape.rs"
+
+[[bin]]
 name = "reject-warning-report"
 path = "src/bin/reject-warning-report.rs"
 

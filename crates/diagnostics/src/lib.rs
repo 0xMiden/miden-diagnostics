@@ -1,5 +1,5 @@
 #![no_std]
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 extern crate alloc;
 
@@ -7,7 +7,7 @@ extern crate alloc;
 extern crate std;
 
 #[cfg(feature = "derive")]
-pub use miden_diagnostics_macros::Diagnostic;
+pub use miden_diagnostics_macros::{Diagnostic, Spanned};
 
 mod adhoc;
 #[cfg(feature = "std")]
@@ -60,9 +60,9 @@ pub use snapshot::{
     PreparedDiagnostic, PreparedSet, prepare_ref, prepare_ref_with_limits,
 };
 pub use source::{
-    LayeredSourceProvider, LineColumn, ResolvedSource, Source, SourceId, SourceKey, SourceMap,
-    SourceMapError, SourceNamespace, SourceProvider, SourceRevision, SourceSpan, TextRange,
-    TextRangeError,
+    ColumnIndex, ColumnNumber, LayeredSourceProvider, LineColumn, LineIndex, LineNumber,
+    ResolvedSource, Source, SourceId, SourceKey, SourceMap, SourceMapError, SourceNamespace,
+    SourceProvider, SourceRevision, SourceSpan, Span, Spanned, TextRange, TextRangeError,
 };
 #[cfg(feature = "std")]
 pub use terminal::{StderrEmitter, StdoutEmitter, TerminalChoice, TerminalPolicy, TerminalWidth};

@@ -143,7 +143,10 @@ mod tests {
     use crate::{SourceId, SourceNamespace, TextRange};
 
     fn span() -> SourceSpan {
-        SourceSpan::session(SourceId::new(SourceNamespace(1), 0), TextRange::new(0, 0).unwrap())
+        SourceSpan::session(
+            SourceId::new(SourceNamespace::new_unchecked(1), 0),
+            TextRange::new(0, 0).unwrap(),
+        )
     }
 
     #[derive(Debug)]

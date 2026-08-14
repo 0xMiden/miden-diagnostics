@@ -1,177 +1,14 @@
-use alloc::{boxed::Box, string::String, vec::Vec};
+mod line_column;
+mod source_id;
+mod span;
+
 use core::fmt;
 
-/// A caller-coordinated source identity namespace.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct SourceNamespace(pub u64);
-
-/// A source identity scoped to a provider/session namespace.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct SourceId {
-    namespace: SourceNamespace,
-    local: u32,
-}
-
-impl SourceId {
-    pub const fn new(namespace: SourceNamespace, local: u32) -> Self {
-        Self { namespace, local }
-    }
-
-    pub const fn namespace(self) -> SourceNamespace {
-        self.namespace
-    }
-
-    pub const fn local(self) -> u32 {
-        self.local
-    }
-}
-
-/// Provenance for a source identity.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum SourceKey {
-    Session(SourceId),
-    Attached(SourceId),
-}
-
-impl SourceKey {
-    pub const fn id(self) -> SourceId {
-        match self {
-            Self::Session(id) | Self::Attached(id) => id,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct SourceRevision(pub u64);
-
-/// A validated, half-open byte range.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct TextRange {
-    start: u32,
-    end: u32,
-}
-
-impl TextRange {
-    pub const fn new(start: u32, end: u32) -> Result<Self, TextRangeError> {
-        if start > end {
-            Err(TextRangeError::Reversed { start, end })
-        } else {
-            Ok(Self { start, end })
-        }
-    }
-
-    pub fn try_from_usize(start: usize, end: usize) -> Result<Self, TextRangeError> {
-        let start =
-            u32::try_from(start).map_err(|_| TextRangeError::OffsetTooLarge { offset: start })?;
-        let end = u32::try_from(end).map_err(|_| TextRangeError::OffsetTooLarge { offset: end })?;
-        Self::new(start, end)
-    }
-
-    pub const fn start(self) -> u32 {
-        self.start
-    }
-
-    pub const fn end(self) -> u32 {
-        self.end
-    }
-
-    pub const fn is_empty(self) -> bool {
-        self.start == self.end
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum TextRangeError {
-    Reversed { start: u32, end: u32 },
-    OffsetTooLarge { offset: usize },
-}
-
-impl fmt::Display for TextRangeError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Reversed { start, end } => {
-                write!(formatter, "source range starts at {start} after ending at {end}")
-            }
-            Self::OffsetTooLarge { offset } => {
-                write!(formatter, "source offset {offset} does not fit in u32")
-            }
-        }
-    }
-}
-
-impl core::error::Error for TextRangeError {}
-
-/// A range together with exact source provenance and an optional revision.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct SourceSpan {
-    source: SourceKey,
-    revision: Option<SourceRevision>,
-    range: TextRange,
-}
-
-impl SourceSpan {
-    pub const fn new(
-        source: SourceKey,
-        revision: Option<SourceRevision>,
-        range: TextRange,
-    ) -> Self {
-        Self {
-            source,
-            revision,
-            range,
-        }
-    }
-
-    pub const fn session(id: SourceId, range: TextRange) -> Self {
-        Self::new(SourceKey::Session(id), None, range)
-    }
-
-    pub const fn attached(id: SourceId, range: TextRange) -> Self {
-        Self::new(SourceKey::Attached(id), None, range)
-    }
-
-    pub const fn with_revision(mut self, revision: SourceRevision) -> Self {
-        self.revision = Some(revision);
-        self
-    }
-
-    pub const fn source(self) -> SourceKey {
-        self.source
-    }
-
-    pub const fn revision(self) -> Option<SourceRevision> {
-        self.revision
-    }
-
-    pub const fn range(self) -> TextRange {
-        self.range
-    }
-}
-
-/// One-based human-readable source coordinates.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct LineColumn {
-    line: u64,
-    column: u64,
-}
-
-impl LineColumn {
-    pub const fn new(line: u64, column: u64) -> Option<Self> {
-        if line == 0 || column == 0 {
-            None
-        } else {
-            Some(Self { line, column })
-        }
-    }
-
-    pub const fn line(self) -> u64 {
-        self.line
-    }
-
-    pub const fn column(self) -> u64 {
-        self.column
-    }
-}
+pub use self::{
+    line_column::*,
+    source_id::{SourceId, SourceKey, SourceNamespace, SourceRevision},
+    span::{SourceSpan, Span, Spanned, TextRange, TextRangeError},
+};
 
 /// A borrowed source resolved from a provider.
 #[derive(Clone, Copy, Debug)]
@@ -195,6 +32,58 @@ pub trait SourceProvider {
     fn get(&self, id: SourceId) -> Option<Source<'_>>;
 
     fn line_column(&self, id: SourceId, offset: u32) -> Option<LineColumn>;
+}
+
+impl<P> SourceProvider for &P
+where
+    P: SourceProvider + ?Sized,
+{
+    fn get(&self, id: SourceId) -> Option<Source<'_>> {
+        (**self).get(id)
+    }
+
+    fn line_column(&self, id: SourceId, offset: u32) -> Option<LineColumn> {
+        (**self).line_column(id, offset)
+    }
+}
+
+impl<P> SourceProvider for &mut P
+where
+    P: SourceProvider + ?Sized,
+{
+    fn get(&self, id: SourceId) -> Option<Source<'_>> {
+        (**self).get(id)
+    }
+
+    fn line_column(&self, id: SourceId, offset: u32) -> Option<LineColumn> {
+        (**self).line_column(id, offset)
+    }
+}
+
+impl<P> SourceProvider for Box<P>
+where
+    P: SourceProvider + ?Sized,
+{
+    fn get(&self, id: SourceId) -> Option<Source<'_>> {
+        (**self).get(id)
+    }
+
+    fn line_column(&self, id: SourceId, offset: u32) -> Option<LineColumn> {
+        (**self).line_column(id, offset)
+    }
+}
+
+impl<P> SourceProvider for Arc<P>
+where
+    P: SourceProvider + ?Sized,
+{
+    fn get(&self, id: SourceId) -> Option<Source<'_>> {
+        (**self).get(id)
+    }
+
+    fn line_column(&self, id: SourceId, offset: u32) -> Option<LineColumn> {
+        (**self).line_column(id, offset)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -394,8 +283,8 @@ impl SourceProvider for SourceMap {
             .partition_point(|line_start| *line_start <= offset_u32)
             .checked_sub(1)?;
         let line_start = usize::try_from(record.line_starts[line_index]).ok()?;
-        let line = u64::try_from(line_index).ok()?.checked_add(1)?;
-        let column = u64::try_from(record.text[line_start..offset].chars().count())
+        let line = u32::try_from(line_index).ok()?.checked_add(1)?;
+        let column = u32::try_from(record.text[line_start..offset].chars().count())
             .ok()?
             .checked_add(1)?;
         LineColumn::new(line, column)
@@ -441,11 +330,11 @@ fn line_column_from_text(text: &str, offset: u32) -> Option<LineColumn> {
         return None;
     }
     let prefix = &text[..offset];
-    let line = u64::try_from(prefix.bytes().filter(|byte| *byte == b'\n').count())
+    let line = u32::try_from(prefix.bytes().filter(|byte| *byte == b'\n').count())
         .ok()?
         .checked_add(1)?;
     let line_start = prefix.rfind('\n').map_or(0, |index| index + 1);
-    let column = u64::try_from(text[line_start..offset].chars().count()).ok()?.checked_add(1)?;
+    let column = u32::try_from(text[line_start..offset].chars().count()).ok()?.checked_add(1)?;
     LineColumn::new(line, column)
 }
 
@@ -457,6 +346,7 @@ mod tests {
 
     #[test]
     fn ranges_and_spans_preserve_checked_provenance() {
+        assert!(core::mem::size_of::<SourceSpan>() < 32);
         assert_eq!(TextRange::new(4, 3), Err(TextRangeError::Reversed { start: 4, end: 3 }));
         let empty = TextRange::new(u32::MAX, u32::MAX).unwrap();
         assert!(empty.is_empty());
@@ -469,7 +359,7 @@ mod tests {
             );
         }
 
-        let id = SourceId::new(SourceNamespace(7), 9);
+        let id = SourceId::new(SourceNamespace::new_unchecked(7), 9);
         let session = SourceSpan::session(id, empty).with_revision(SourceRevision(11));
         let attached = SourceSpan::attached(id, empty);
         assert_eq!(session.source(), SourceKey::Session(id));
@@ -481,8 +371,8 @@ mod tests {
 
     #[test]
     fn source_map_ids_are_namespaced_monotonic_and_failed_insertions_do_not_mutate() {
-        let mut first = SourceMap::new(SourceNamespace(1));
-        let mut second = SourceMap::new(SourceNamespace(2));
+        let mut first = SourceMap::new(SourceNamespace::new_unchecked(1));
+        let mut second = SourceMap::new(SourceNamespace::new_unchecked(2));
         let first_id = first.insert("a", "text", None).unwrap();
         let next_id = first.insert("b", "", Some(SourceRevision(2))).unwrap();
         let second_id = second.insert("a", "text", None).unwrap();
@@ -506,7 +396,7 @@ mod tests {
 
     #[test]
     fn line_columns_are_one_based_scalar_coordinates_with_lf_line_breaks() {
-        let mut sources = SourceMap::new(SourceNamespace(1));
+        let mut sources = SourceMap::new(SourceNamespace::new_unchecked(1));
         let id = sources.insert("unicode", "a😀e\u{301}\r\nz\n", None).unwrap();
         let cases = [
             (0, (1, 1)),
@@ -520,6 +410,8 @@ mod tests {
             (12, (3, 1)),
         ];
         for (offset, (line, column)) in cases {
+            let line = LineNumber::new(line).unwrap();
+            let column = ColumnNumber::new(column).unwrap();
             let location = sources.line_column(id, offset).unwrap();
             assert_eq!((location.line(), location.column()), (line, column));
         }
@@ -531,7 +423,7 @@ mod tests {
 
     #[test]
     fn layered_resolution_never_collapses_provenance_or_accepts_bad_providers() {
-        let namespace = SourceNamespace(5);
+        let namespace = SourceNamespace::new_unchecked(5);
         let mut session = SourceMap::new(namespace);
         let mut attached = SourceMap::new(namespace);
         let session_id = session.insert("same", "session", None).unwrap();
@@ -572,7 +464,7 @@ mod tests {
             }
 
             fn line_column(&self, _id: SourceId, _offset: u32) -> Option<LineColumn> {
-                LineColumn::new(1, u64::from(self.bad_location) + 1)
+                LineColumn::new(1, u32::from(self.bad_location) + 1)
             }
         }
 
@@ -616,7 +508,7 @@ mod tests {
         require::<SourceMap>();
 
         let empty_name = "".to_string();
-        let mut sources = SourceMap::new(SourceNamespace(1));
+        let mut sources = SourceMap::new(SourceNamespace::new_unchecked(1));
         let id = sources.insert(empty_name, "", None).unwrap();
         let source = sources.get(id).unwrap();
         assert_eq!(source.display_name, "");

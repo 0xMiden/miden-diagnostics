@@ -53,7 +53,7 @@ impl Diagnostic for RichDiagnostic {
 }
 
 pub fn rich_report() -> Report {
-    let mut sources = SourceMap::new(SourceNamespace(44));
+    let mut sources = SourceMap::new(SourceNamespace::new_unchecked(44));
     let source = sources
         .insert("attached.masm", "begin\n    broken\nend\n", None)
         .expect("fixture source must fit");
@@ -66,7 +66,7 @@ pub fn rich_report() -> Report {
 }
 
 pub fn rich_session_diagnostic() -> (RichDiagnostic, SourceMap) {
-    let mut sources = SourceMap::new(SourceNamespace(46));
+    let mut sources = SourceMap::new(SourceNamespace::new_unchecked(46));
     let source = sources
         .insert("session.masm", "begin\n    broken\nend\n", None)
         .expect("fixture source must fit");
@@ -110,7 +110,7 @@ impl Diagnostic for MissingSource {
     fn visit(&self, visitor: &mut dyn VisitDiagnostic) {
         visitor.label(Label {
             span: SourceSpan::new(
-                SourceKey::Attached(SourceId::new(SourceNamespace(45), 0)),
+                SourceKey::Attached(SourceId::new(SourceNamespace::new_unchecked(45), 0)),
                 None,
                 TextRange::new(0, 1).unwrap(),
             ),

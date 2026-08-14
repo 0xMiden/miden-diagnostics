@@ -14,7 +14,7 @@ struct Session {
 }
 
 fn analyze(input: String) -> Session {
-    let mut sources = SourceMap::new(SourceNamespace(1));
+    let mut sources = SourceMap::new(SourceNamespace::new_unchecked(1));
     let source = sources
         .insert("<expression>", input.clone(), None)
         .expect("the command-line expression must fit the u32 source model");

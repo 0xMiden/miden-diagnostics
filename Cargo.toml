@@ -20,6 +20,10 @@ edition = "2024"
 rust-version = "1.96"
 exclude = [".github/", "docs/", "experiments/"]
 
+[workspace.dependencies]
+proptest        = { version = "1.11", default-features = false, features = ["no_std", "alloc"] }
+proptest-derive = { version = "0.8", default-features = false }
+
 [profile.release]
 opt-level = 2
 lto = true

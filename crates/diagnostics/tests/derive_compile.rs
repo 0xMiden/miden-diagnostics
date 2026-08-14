@@ -81,6 +81,14 @@ fn derive_external_feature_and_ui_contracts_are_executable() {
             ][..],
         ),
         (
+            "reject-spanned-shape",
+            &[
+                "`transparent` and `forward(field)` are mutually exclusive",
+                "a span field must be singular and non-optional",
+                "enum spanned metadata belongs on each variant",
+            ][..],
+        ),
+        (
             "reject-warning-report",
             &["report! cannot construct a literal Warning diagnostic"][..],
         ),

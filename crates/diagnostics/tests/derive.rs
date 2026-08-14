@@ -6,8 +6,8 @@ use core::{cell::Cell, error::Error, fmt};
 use diag::{
     AnnotateRenderer, Applicability, Diagnostic as _, DiagnosticCodeRef, DiagnosticTag,
     Explanation, LabelStyle, LayeredSourceProvider, OwnedLabel, OwnedSuggestion, OwnedTextEdit,
-    PreparedDiagnostic, Severity, SourceId, SourceMap, SourceNamespace, SourceSpan, TextRange,
-    prepare_ref,
+    PreparedDiagnostic, Severity, SourceId, SourceMap, SourceNamespace, SourceSpan, Spanned,
+    TextRange, prepare_ref,
 };
 use miden_diagnostics as diag;
 
@@ -29,7 +29,10 @@ diag::diagnostic_codes! {
 }
 
 fn span(start: u32, end: u32) -> SourceSpan {
-    SourceSpan::session(SourceId::new(SourceNamespace(3), 0), TextRange::new(start, end).unwrap())
+    SourceSpan::session(
+        SourceId::new(SourceNamespace::new_unchecked(3), 0),
+        TextRange::new(start, end).unwrap(),
+    )
 }
 
 #[derive(Debug)]
@@ -53,6 +56,28 @@ impl Error for Cause {}
 )]
 struct Related {
     value: u8,
+}
+
+#[derive(Debug)]
+struct DomainSpan(SourceSpan);
+
+impl Spanned for DomainSpan {
+    fn span(&self) -> SourceSpan {
+        self.0
+    }
+}
+
+#[derive(Debug, diag::Diagnostic)]
+#[diagnostic(crate = diag, message = "custom spanned field")]
+struct CustomSpannedDiagnostic {
+    #[label(primary, "domain label")]
+    label: DomainSpan,
+    #[suggestion(
+        "replace domain value",
+        replacement = "fixed",
+        applicability = MachineApplicable
+    )]
+    suggestion: DomainSpan,
 }
 
 #[derive(Debug, diag::Diagnostic)]
@@ -207,10 +232,10 @@ fn descriptor_declarations_and_derive_cover_the_complete_protocol() {
     assert_eq!(snapshot.causes[0].message, "plain cause");
     assert_eq!(snapshot.diagnostic_source.as_ref().unwrap().message, "related 8");
 
-    let mut sources = SourceMap::new(SourceNamespace(3));
+    let mut sources = SourceMap::new(SourceNamespace::new_unchecked(3));
     assert_eq!(
         sources.insert("derive.masm", "][abc", None).unwrap(),
-        SourceId::new(SourceNamespace(3), 0)
+        SourceId::new(SourceNamespace::new_unchecked(3), 0)
     );
     let prepared = PreparedDiagnostic {
         snapshot,
@@ -264,6 +289,17 @@ fn enums_generics_display_fallback_and_forwarding_preserve_semantics() {
 
     assert_eq!(DisplayFallback.to_string_for_test(), "display fallback");
     assert_eq!(Generic { value: 11 }.to_string_for_test(), "generic 11");
+}
+
+#[test]
+fn singular_labels_and_suggestions_accept_custom_spanned_fields() {
+    let diagnostic = CustomSpannedDiagnostic {
+        label: DomainSpan(span(0, 1)),
+        suggestion: DomainSpan(span(2, 3)),
+    };
+    let snapshot = prepare_ref(&diagnostic).unwrap();
+    assert_eq!(snapshot.labels[0].span, span(0, 1));
+    assert_eq!(snapshot.suggestions[0].edits[0].span, span(2, 3));
 }
 
 trait DiagnosticTestExt: diag::Diagnostic {

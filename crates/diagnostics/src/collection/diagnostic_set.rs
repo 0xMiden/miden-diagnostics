@@ -49,6 +49,20 @@ impl DiagnosticSet {
         self.diagnostics.into_vec()
     }
 
+    /// Retains the session source provider needed to resolve this set's session spans.
+    ///
+    /// The provider is shared by all diagnostic occurrences, so attaching it is cheap when the
+    /// caller already owns it through an [`Arc`].
+    pub fn attach_session_sources<P>(mut self, sources: Arc<P>) -> Self
+    where
+        P: SourceProvider + Send + Sync + 'static + ?Sized,
+    {
+        for entry in &mut self.diagnostics {
+            entry.diagnostic.set_session_sources(sources.clone());
+        }
+        self
+    }
+
     /// Evaluate a [FailurePolicy] against this set, returning true if the policy dictates that the
     /// outcome of a related operation should be considered a failure.
     pub fn assess<P>(&self, policy: &P) -> bool

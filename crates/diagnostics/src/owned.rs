@@ -104,6 +104,7 @@ pub struct OwnedDiagnostic {
     inner: Box<dyn ErasedDiagnostic>,
     contexts: Vec<ContextFrame>,
     severity_override: Option<Severity>,
+    session_sources: Option<Box<dyn SourceProvider + Send + Sync>>,
     attached_sources: Option<Box<dyn SourceProvider + Send + Sync>>,
 }
 
@@ -155,6 +156,7 @@ impl OwnedDiagnostic {
             inner: Box::new(diagnostic),
             contexts: Vec::new(),
             severity_override: None,
+            session_sources: None,
             attached_sources: None,
         }
     }
@@ -222,6 +224,30 @@ impl OwnedDiagnostic {
         self
     }
 
+    /// Retains a session source provider with this diagnostic occurrence.
+    ///
+    /// This is useful when the operation that allocated session source IDs transfers diagnostics
+    /// to a caller without otherwise retaining the operation's source manager. An explicit source
+    /// provider passed to [`Self::prepare`] or [`Self::display_with_sources`] takes precedence.
+    pub fn attach_session_sources<P>(mut self, sources: P) -> Self
+    where
+        P: SourceProvider + Send + Sync + 'static,
+    {
+        self.set_session_sources(sources);
+        self
+    }
+
+    pub fn set_session_sources<P>(&mut self, sources: P)
+    where
+        P: SourceProvider + Send + Sync + 'static,
+    {
+        self.session_sources = Some(Box::new(sources));
+    }
+
+    pub fn session_sources(&self) -> Option<&(dyn SourceProvider + Send + Sync + 'static)> {
+        self.session_sources.as_deref()
+    }
+
     pub fn attached_sources(&self) -> Option<&(dyn SourceProvider + Send + Sync + 'static)> {
         self.attached_sources.as_deref()
     }
@@ -255,7 +281,10 @@ impl OwnedDiagnostic {
     /// Rendering a session span in the returned diagnostic will produce a
     /// missing-source error.
     pub fn prepare_attached(&self) -> Result<PreparedDiagnostic<'_>, PrepareError> {
-        self.prepare(&EMPTY_SOURCE_PROVIDER)
+        let session = self
+            .session_sources()
+            .map_or(&EMPTY_SOURCE_PROVIDER as &dyn SourceProvider, |sources| sources);
+        self.prepare(session)
     }
 
     /// Prepares this diagnostic using only attached sources and explicit limits.
@@ -263,12 +292,18 @@ impl OwnedDiagnostic {
         &self,
         limits: PreparationLimits,
     ) -> Result<PreparedDiagnostic<'_>, PrepareError> {
-        self.prepare_with_limits(&EMPTY_SOURCE_PROVIDER, limits)
+        let session = self
+            .session_sources()
+            .map_or(&EMPTY_SOURCE_PROVIDER as &dyn SourceProvider, |sources| sources);
+        self.prepare_with_limits(session, limits)
     }
 
     /// Returns a rich-formatting adapter using attached sources and portable defaults.
     pub fn display(&self) -> DiagnosticDisplay<'_> {
-        DiagnosticDisplay::new(self, &EMPTY_SOURCE_PROVIDER)
+        let session = self
+            .session_sources()
+            .map_or(&EMPTY_SOURCE_PROVIDER as &dyn SourceProvider, |sources| sources);
+        DiagnosticDisplay::new(self, session)
     }
 
     /// Returns a rich-formatting adapter with an explicit session source provider.
@@ -309,6 +344,7 @@ impl OwnedDiagnostic {
             inner,
             contexts,
             severity_override,
+            session_sources,
             attached_sources,
         } = self;
         if inner.as_any().is::<T>() {
@@ -327,6 +363,7 @@ impl OwnedDiagnostic {
                 inner,
                 contexts,
                 severity_override,
+                session_sources,
                 attached_sources,
             })
         }
@@ -351,6 +388,45 @@ impl fmt::Display for OwnedDiagnostic {
     }
 }
 
+/// Delegates the semantic diagnostic protocol to the owned occurrence.
+///
+/// Occurrence transport metadata such as context frames and attached source providers is consumed
+/// by [`OwnedDiagnostic::prepare`]; it is intentionally not exposed when an owned diagnostic is
+/// nested as a plain [`Diagnostic`].
+impl Diagnostic for OwnedDiagnostic {
+    fn message(&self, out: &mut dyn fmt::Write) -> fmt::Result {
+        self.as_diagnostic().message(out)
+    }
+
+    fn descriptor(&self) -> Option<&'static DiagnosticDescriptor> {
+        self.as_diagnostic().descriptor()
+    }
+
+    fn code(&self) -> Option<DiagnosticCodeRef<'_>> {
+        self.as_diagnostic().code()
+    }
+
+    fn severity(&self) -> Severity {
+        OwnedDiagnostic::severity(self)
+    }
+
+    fn tags(&self) -> &[DiagnosticTag] {
+        self.as_diagnostic().tags()
+    }
+
+    fn visit(&self, visitor: &mut dyn crate::VisitDiagnostic) {
+        self.as_diagnostic().visit(visitor)
+    }
+
+    fn cause(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        self.as_diagnostic().cause()
+    }
+
+    fn diagnostic_source(&self) -> Option<&dyn Diagnostic> {
+        self.as_diagnostic().diagnostic_source()
+    }
+}
+
 impl fmt::Debug for OwnedDiagnostic {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
@@ -359,6 +435,7 @@ impl fmt::Debug for OwnedDiagnostic {
             .field("effective_severity", &self.severity())
             .field("severity_override", &self.severity_override)
             .field("contexts", &self.contexts)
+            .field("has_session_sources", &self.session_sources.is_some())
             .field("has_attached_sources", &self.attached_sources.is_some())
             .finish()
     }
@@ -425,10 +502,18 @@ impl fmt::Display for DiagnosticDisplay<'_> {
 
 /// A failed-computation wrapper that promotes its occurrence to error.
 pub struct Report {
-    inner: OwnedDiagnostic,
+    inner: Box<OwnedDiagnostic>,
 }
 
 impl Report {
+    /// Creates a failed-computation report from an ad-hoc display message.
+    ///
+    /// The message is formatted immediately, so it may borrow local values and does not need to
+    /// satisfy the owned diagnostic transport bounds.
+    pub fn msg(message: impl fmt::Display) -> Self {
+        Self::new(crate::AdHocDiagnostic::new(format_args!("{message}")))
+    }
+
     /// Creates a failed-computation report.
     ///
     /// ```compile_fail
@@ -469,13 +554,17 @@ impl Report {
         T: Diagnostic + Send + Sync + 'static,
     {
         Self {
-            inner: OwnedDiagnostic::new(diagnostic).with_severity_override(Severity::Error),
+            inner: Box::new(
+                OwnedDiagnostic::new(diagnostic).with_severity_override(Severity::Error),
+            ),
         }
     }
 
     pub fn from_diagnostic(mut diagnostic: OwnedDiagnostic) -> Self {
         diagnostic.set_severity_override(Some(Severity::Error));
-        Self { inner: diagnostic }
+        Self {
+            inner: Box::new(diagnostic),
+        }
     }
 
     pub fn from_error<E: core::error::Error + Send + Sync + 'static>(error: E) -> Self {
@@ -515,8 +604,21 @@ impl Report {
     where
         P: SourceProvider + Send + Sync + 'static,
     {
-        self.inner = self.inner.attach_sources(sources);
+        self.inner.attached_sources = Some(Box::new(sources));
         self
+    }
+
+    /// Retains a session source provider with this report.
+    pub fn attach_session_sources<P>(mut self, sources: P) -> Self
+    where
+        P: SourceProvider + Send + Sync + 'static,
+    {
+        self.inner.set_session_sources(sources);
+        self
+    }
+
+    pub fn session_sources(&self) -> Option<&(dyn SourceProvider + Send + Sync + 'static)> {
+        self.inner.session_sources()
     }
 
     pub fn attached_sources(&self) -> Option<&(dyn SourceProvider + Send + Sync + 'static)> {
@@ -579,14 +681,16 @@ impl Report {
     }
 
     pub fn downcast<T: 'static>(self) -> Result<Box<T>, Self> {
-        match self.inner.downcast() {
+        match (*self.inner).downcast() {
             Ok(value) => Ok(value),
-            Err(inner) => Err(Self { inner }),
+            Err(inner) => Err(Self {
+                inner: Box::new(inner),
+            }),
         }
     }
 
     pub fn into_diagnostic(self) -> OwnedDiagnostic {
-        self.inner
+        *self.inner
     }
 }
 
@@ -686,8 +790,9 @@ mod tests {
 
     use super::*;
     use crate::{
-        DescriptorOrigin, DiagnosticCode, DiagnosticDescriptor, DiagnosticTag, Explanation,
-        SourceMap, SourceNamespace, SourceRevision,
+        DescriptorOrigin, DiagnosticCode, DiagnosticDescriptor, DiagnosticTag, Explanation, Label,
+        LabelStyle, SourceMap, SourceNamespace, SourceRevision, SourceSpan, TextRange,
+        VisitDiagnostic,
     };
 
     static WARNING: DiagnosticDescriptor = DiagnosticDescriptor {
@@ -728,7 +833,7 @@ mod tests {
         owned.downcast_mut::<Mutable>().unwrap().0 = 2;
         assert_eq!(owned.downcast::<Mutable>().unwrap().0, 2);
 
-        let mut sources = SourceMap::new(SourceNamespace(9));
+        let mut sources = SourceMap::new(SourceNamespace::new_unchecked(9));
         let source_id = sources.insert("attached", "text", None).unwrap();
         let failed = OwnedDiagnostic::new(Mutable(3))
             .with_context("kept")
@@ -745,6 +850,11 @@ mod tests {
         assert_eq!(report.severity(), Severity::Error);
         assert_eq!(report.contexts()[0].message(), "report context");
         assert_eq!(report.downcast_ref::<Mutable>().unwrap().0, 4);
+    }
+
+    #[test]
+    fn report_is_a_pointer_sized_failure_handle() {
+        assert_eq!(core::mem::size_of::<Report>(), core::mem::size_of::<usize>());
     }
 
     #[derive(Debug)]
@@ -778,6 +888,52 @@ mod tests {
         assert!(core::ptr::eq(diagnostic.descriptor().unwrap(), &WARNING));
     }
 
+    #[test]
+    fn report_msg_formats_borrowed_values_immediately() {
+        let message = String::from("ad-hoc failure");
+        let report = Report::msg(&message);
+        drop(message);
+        assert_eq!(report.to_string(), "ad-hoc failure");
+    }
+
+    #[derive(Debug)]
+    struct LabeledFailure(SourceSpan);
+
+    impl Diagnostic for LabeledFailure {
+        fn message(&self, out: &mut dyn Write) -> fmt::Result {
+            out.write_str("labeled failure")
+        }
+
+        fn visit(&self, visitor: &mut dyn VisitDiagnostic) {
+            visitor.label(Label {
+                span: self.0,
+                style: LabelStyle::Primary,
+                message: Some(format_args!("failure occurred here")),
+            });
+        }
+    }
+
+    #[test]
+    fn report_display_uses_retained_session_sources() {
+        let mut sources = SourceMap::new(SourceNamespace::new_unchecked(12));
+        let id = sources.insert("input.masm", "begin broken end", None).unwrap();
+        let span = SourceSpan::session(id, TextRange::new(6, 12).unwrap());
+        let report = Report::new(LabeledFailure(span)).attach_session_sources(sources);
+
+        let rendered = format!("{report:?}");
+        assert!(rendered.contains("input.masm"));
+        assert!(rendered.contains("broken"));
+        assert!(rendered.contains("failure occurred here"));
+    }
+
+    #[test]
+    fn unknown_labels_do_not_require_a_source_provider() {
+        let report = Report::new(LabeledFailure(SourceSpan::UNKNOWN));
+        let rendered = format!("{report:?}");
+        assert!(rendered.contains("labeled failure"));
+        assert!(!rendered.contains("missing source"));
+    }
+
     #[derive(Debug)]
     struct Cause;
 
@@ -804,7 +960,7 @@ mod tests {
 
     #[test]
     fn report_delegates_error_source_and_retains_attached_bundle() {
-        let mut sources = SourceMap::new(SourceNamespace(4));
+        let mut sources = SourceMap::new(SourceNamespace::new_unchecked(4));
         let id = sources.insert("input", "source", Some(SourceRevision(1))).unwrap();
         let report = Report::new(WithCause(Cause)).attach_sources(sources);
         assert_eq!(core::error::Error::source(&report).unwrap().to_string(), "root cause");
@@ -864,7 +1020,7 @@ mod tests {
 
     #[test]
     fn equal_attached_source_ids_remain_scoped_to_their_own_occurrence() {
-        let namespace = SourceNamespace(12);
+        let namespace = SourceNamespace::new_unchecked(12);
         let mut first_sources = SourceMap::new(namespace);
         let mut second_sources = SourceMap::new(namespace);
         let first_id = first_sources.insert("same", "first", None).unwrap();

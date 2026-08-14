@@ -48,15 +48,16 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "miden-diagnostics"
-version = "1.0.0"
+version = "1.0.0-alpha.1"
 dependencies = [
  "annotate-snippets",
  "miden-diagnostics-macros",
+ "paste",
 ]
 
 [[package]]
 name = "miden-diagnostics-macros"
-version = "1.0.0"
+version = "1.0.0-alpha.1"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -70,6 +71,12 @@ version = "0.0.0"
 dependencies = [
  "miden-diagnostics",
 ]
+
+[[package]]
+name = "paste"
+version = "1.0.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
 name = "proc-macro-crate"

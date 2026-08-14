@@ -106,7 +106,7 @@ impl Diagnostic for LocalDiagnostic<'_> {
 
 #[test]
 fn standalone_preparation_formats_borrowed_values_immediately_and_promotes_primary() {
-    let id = SourceId::new(SourceNamespace(1), 0);
+    let id = SourceId::new(SourceNamespace::new_unchecked(1), 0);
     let value = Rc::new(Cell::new(7));
     let prefix = String::from("local");
     let diagnostic = LocalDiagnostic {
@@ -285,7 +285,8 @@ impl Diagnostic for EmptySuggestion {
 
 #[test]
 fn preparation_reports_formatting_primary_and_empty_suggestion_errors() {
-    let span = SourceSpan::session(SourceId::new(SourceNamespace(2), 0), range(0, 0));
+    let span =
+        SourceSpan::session(SourceId::new(SourceNamespace::new_unchecked(2), 0), range(0, 0));
     assert_eq!(prepare_ref(&FormattingFailure), Err(PrepareError::MessageFormatting));
     assert_eq!(
         prepare_ref(&VisitorFormattingFailure { span }),
@@ -467,19 +468,16 @@ impl Diagnostic for TransparentOuter {
 }
 
 #[test]
-fn ambiguous_same_address_nodes_are_rejected_conservatively() {
+fn distinct_same_address_diagnostic_nodes_are_not_cycles() {
     let outer = TransparentOuter(TransparentInner);
     assert_eq!(
         (&outer as *const TransparentOuter).cast::<()>(),
         (&outer.0 as *const TransparentInner).cast::<()>(),
     );
-    assert_eq!(
-        prepare_ref(&outer),
-        Err(PrepareError::DiagnosticCycle {
-            relation: DiagnosticRelation::Related,
-            depth: 1,
-        })
-    );
+    let snapshot = prepare_ref(&outer).unwrap();
+    assert_eq!(snapshot.message, "outer");
+    assert_eq!(snapshot.related.len(), 1);
+    assert_eq!(snapshot.related[0].message, "inner");
 }
 
 #[derive(Debug)]
@@ -568,7 +566,7 @@ fn set_preparation_uses_stored_metadata_and_stable_ids_repeatably() {
     );
     state.store(true, Ordering::SeqCst);
     let set = collector.finish();
-    let sources = SourceMap::new(SourceNamespace(10));
+    let sources = SourceMap::new(SourceNamespace::new_unchecked(10));
 
     let first = set.prepare(&sources).unwrap();
     let second = set.prepare(&sources).unwrap();
@@ -603,7 +601,7 @@ fn prepared_contexts_are_presented_outermost_first_without_reordering_storage() 
     let mut collector = DiagnosticCollector::new();
     collector.add_owned(report.into_diagnostic());
     let set = collector.finish();
-    let sources = SourceMap::new(SourceNamespace(11));
+    let sources = SourceMap::new(SourceNamespace::new_unchecked(11));
     let prepared = set.prepare(&sources).unwrap();
     let diagnostic = prepared.iter().next().unwrap();
 
@@ -621,7 +619,7 @@ fn failed_set_preparation_is_atomic_and_leaves_the_set_reusable() {
     collector.add(Unlocated("good"));
     collector.add(FormattingFailure);
     let set = collector.finish();
-    let sources = SourceMap::new(SourceNamespace(11));
+    let sources = SourceMap::new(SourceNamespace::new_unchecked(11));
     assert!(matches!(set.prepare(&sources), Err(PrepareError::MessageFormatting)));
     assert!(matches!(set.prepare(&sources), Err(PrepareError::MessageFormatting)));
     assert_eq!(set.len(), 2);
@@ -717,10 +715,10 @@ impl Diagnostic for RichDiagnostic {
 }
 
 fn rich_owned() -> (SourceMap, OwnedDiagnostic, SourceId, SourceId) {
-    let mut session = SourceMap::new(SourceNamespace(20));
+    let mut session = SourceMap::new(SourceNamespace::new_unchecked(20));
     let session_id =
         session.insert("same.masm", "fn main() {}\n", Some(SourceRevision(7))).unwrap();
-    let mut attached = SourceMap::new(SourceNamespace(20));
+    let mut attached = SourceMap::new(SourceNamespace::new_unchecked(20));
     let attached_id = attached.insert("same.masm", "var value = 1\n", None).unwrap();
     let diagnostic = RichDiagnostic {
         session: SourceSpan::session(session_id, range(0, 2)).with_revision(SourceRevision(7)),
@@ -744,7 +742,7 @@ fn rich_prepared() -> (SourceMap, miden_diagnostics::DiagnosticSet, SourceId, So
 
 #[test]
 fn owned_preparation_preserves_occurrence_metadata_and_source_routing() {
-    let sources = SourceMap::new(SourceNamespace(19));
+    let sources = SourceMap::new(SourceNamespace::new_unchecked(19));
     let owned = OwnedDiagnostic::new(Unlocated("warning occurrence"))
         .with_severity_override(Severity::Warning)
         .with_context("outer context");
@@ -813,7 +811,7 @@ fn diagnostic_display_has_strict_errors_and_safe_degradation() {
         "error: diagnostic preparation failed; rich output unavailable"
     );
 
-    let namespace = SourceNamespace(21);
+    let namespace = SourceNamespace::new_unchecked(21);
     let missing_id = SourceId::new(namespace, 0);
     let missing =
         OwnedDiagnostic::new(MissingLocated(SourceSpan::session(missing_id, range(0, 0))));
@@ -845,7 +843,7 @@ fn diagnostic_display_has_strict_errors_and_safe_degradation() {
 
 #[test]
 fn attached_display_and_explicit_preparation_limits_are_supported() {
-    let mut attached = SourceMap::new(SourceNamespace(22));
+    let mut attached = SourceMap::new(SourceNamespace::new_unchecked(22));
     let id = attached.insert("attached.masm", "bad token", None).unwrap();
     let owned = OwnedDiagnostic::new(MissingLocated(SourceSpan::attached(id, range(0, 3))))
         .attach_sources(attached);
@@ -869,7 +867,7 @@ fn attached_display_and_explicit_preparation_limits_are_supported() {
             limit: 3,
         })
     ));
-    let sources = SourceMap::new(SourceNamespace(23));
+    let sources = SourceMap::new(SourceNamespace::new_unchecked(23));
     assert!(matches!(
         Report::new(Unlocated("long")).prepare_with_limits(&sources, limits),
         Err(PrepareError::ItemTooLarge {
@@ -1000,8 +998,8 @@ fn snapshot_with_label(span: SourceSpan) -> DiagnosticSnapshot {
 
 #[test]
 fn renderer_rejects_source_revision_range_edit_url_and_width_failures() {
-    let missing_id = SourceId::new(SourceNamespace(30), 0);
-    let empty = SourceMap::new(SourceNamespace(30));
+    let missing_id = SourceId::new(SourceNamespace::new_unchecked(30), 0);
+    let empty = SourceMap::new(SourceNamespace::new_unchecked(30));
     let prepared = PreparedDiagnostic {
         snapshot: snapshot_with_label(SourceSpan::session(missing_id, range(0, 0))),
         sources: LayeredSourceProvider::session_only(&empty),
@@ -1011,7 +1009,7 @@ fn renderer_rejects_source_revision_range_edit_url_and_width_failures() {
         Err(RenderError::MissingSource(SourceKey::Session(missing_id)))
     );
 
-    let mut sources = SourceMap::new(SourceNamespace(31));
+    let mut sources = SourceMap::new(SourceNamespace::new_unchecked(31));
     let id = sources.insert("unicode.masm", "é", Some(SourceRevision(2))).unwrap();
     let prepared = PreparedDiagnostic {
         snapshot: snapshot_with_label(
@@ -1197,8 +1195,8 @@ impl SourceProvider for CorruptProvider {
 
 #[test]
 fn renderer_distinguishes_provider_corruption() {
-    let id = SourceId::new(SourceNamespace(40), 0);
-    let other = SourceId::new(SourceNamespace(40), 1);
+    let id = SourceId::new(SourceNamespace::new_unchecked(40), 0);
+    let other = SourceId::new(SourceNamespace::new_unchecked(40), 1);
     let provider = CorruptProvider {
         requested: id,
         returned: other,
@@ -1266,7 +1264,7 @@ impl SourceProvider for MetadataProvider {
 
 #[test]
 fn metadata_only_sources_preserve_each_label_role_and_location() {
-    let id = SourceId::new(SourceNamespace(41), 0);
+    let id = SourceId::new(SourceNamespace::new_unchecked(41), 0);
     let provider = MetadataProvider {
         id,
         locations: vec![
@@ -1328,9 +1326,9 @@ fn metadata_only_sources_preserve_each_label_role_and_location() {
 
 #[test]
 fn renderer_enforces_terminal_safety_and_explicit_hyperlinks() {
-    let sources = SourceMap::new(SourceNamespace(50));
+    let sources = SourceMap::new(SourceNamespace::new_unchecked(50));
     let mut snapshot = snapshot_with_label(SourceSpan::session(
-        SourceId::new(SourceNamespace(50), 0),
+        SourceId::new(SourceNamespace::new_unchecked(50), 0),
         range(0, 0),
     ));
     snapshot.labels.clear();
@@ -1375,7 +1373,7 @@ fn renderer_enforces_terminal_safety_and_explicit_hyperlinks() {
 
 #[test]
 fn every_rendered_user_field_crosses_the_terminal_safety_boundary() {
-    let mut sources = SourceMap::new(SourceNamespace(51));
+    let mut sources = SourceMap::new(SourceNamespace::new_unchecked(51));
     let id = sources
         .insert(
             "pa\u{1b}]0;title\u{7}th\u{009d}.masm",
@@ -1500,7 +1498,7 @@ impl Diagnostic for MissingLocated {
 #[test]
 #[cfg(feature = "std")]
 fn fmt_and_io_emitters_are_repeatable_and_report_degradation() {
-    let namespace = SourceNamespace(60);
+    let namespace = SourceNamespace::new_unchecked(60);
     let missing = SourceSpan::session(SourceId::new(namespace, 0), range(0, 0));
     let mut collector = DiagnosticCollector::new();
     collector.add(Unlocated("first"));
@@ -1563,7 +1561,7 @@ fn io_emitter_flush_failure_reports_the_completed_prefix() {
     collector.add(Unlocated("one"));
     collector.add(Unlocated("two"));
     let set = collector.finish();
-    let sources = SourceMap::new(SourceNamespace(61));
+    let sources = SourceMap::new(SourceNamespace::new_unchecked(61));
     let prepared = set.prepare(&sources).unwrap();
     let writer = TrackingWriter {
         fail_flush: true,
@@ -1608,7 +1606,7 @@ fn io_write_failure_stops_without_flush_and_reports_only_complete_records() {
     collector.add(Unlocated("one"));
     collector.add(Unlocated("two"));
     let set = collector.finish();
-    let sources = SourceMap::new(SourceNamespace(62));
+    let sources = SourceMap::new(SourceNamespace::new_unchecked(62));
     let prepared = set.prepare(&sources).unwrap();
     let writer = FailingIoWriter {
         bytes: vec![],
@@ -1627,7 +1625,7 @@ fn io_write_failure_stops_without_flush_and_reports_only_complete_records() {
 #[cfg(feature = "std")]
 fn empty_io_set_flushes_once_without_emitting_a_record() {
     let set = DiagnosticCollector::new().finish();
-    let sources = SourceMap::new(SourceNamespace(63));
+    let sources = SourceMap::new(SourceNamespace::new_unchecked(63));
     let prepared = set.prepare(&sources).unwrap();
     let mut emitter = IoEmitter::new(TrackingWriter::default(), AnnotateRenderer::default());
     let summary = emitter.emit_set(&prepared).unwrap();
@@ -1655,7 +1653,7 @@ impl fmt::Write for FailingFmtWriter {
 
 #[test]
 fn sink_failure_while_writing_a_degraded_record_does_not_count_it() {
-    let namespace = SourceNamespace(64);
+    let namespace = SourceNamespace::new_unchecked(64);
     let mut collector = DiagnosticCollector::new();
     collector.add(MissingLocated(SourceSpan::session(SourceId::new(namespace, 0), range(0, 0))));
     let set = collector.finish();
@@ -1675,7 +1673,7 @@ fn sink_failure_while_writing_a_degraded_record_does_not_count_it() {
 
 #[test]
 fn deterministic_malformed_corpus_never_unwinds_through_the_renderer() {
-    let mut sources = SourceMap::new(SourceNamespace(70));
+    let mut sources = SourceMap::new(SourceNamespace::new_unchecked(70));
     let id = sources.insert("fuzz.masm", "éx", None).unwrap();
     let mut empty_suggestion = snapshot_with_label(SourceSpan::session(id, range(0, 2)));
     empty_suggestion.suggestions.push(OwnedSuggestion {
@@ -1740,7 +1738,7 @@ fn deterministic_malformed_corpus_never_unwinds_through_the_renderer() {
         assert!(result.unwrap().is_err());
     }
 
-    let missing_id = SourceId::new(SourceNamespace(70), 99);
+    let missing_id = SourceId::new(SourceNamespace::new_unchecked(70), 99);
     let missing = PreparedDiagnostic {
         snapshot: snapshot_with_label(SourceSpan::session(missing_id, range(0, 0))),
         sources: LayeredSourceProvider::session_only(&sources),
@@ -1754,7 +1752,7 @@ fn deterministic_malformed_corpus_never_unwinds_through_the_renderer() {
 
     let corrupt = CorruptProvider {
         requested: id,
-        returned: SourceId::new(SourceNamespace(70), 1),
+        returned: SourceId::new(SourceNamespace::new_unchecked(70), 1),
         declared: 3,
         text: "éx",
     };
@@ -1790,7 +1788,7 @@ fn deterministic_malformed_corpus_never_unwinds_through_the_renderer() {
 
 #[test]
 fn all_severities_have_distinct_terminal_names() {
-    let sources = SourceMap::new(SourceNamespace(80));
+    let sources = SourceMap::new(SourceNamespace::new_unchecked(80));
     for (severity, expected) in [
         (Severity::Error, "error: message"),
         (Severity::Warning, "warning: message"),
@@ -1828,7 +1826,7 @@ fn single_emit_reports_status_and_flushes() {
     let mut collector = DiagnosticCollector::new();
     collector.add(Unlocated("one"));
     let set = collector.finish();
-    let sources = SourceMap::new(SourceNamespace(90));
+    let sources = SourceMap::new(SourceNamespace::new_unchecked(90));
     let prepared = set.prepare(&sources).unwrap();
     let diagnostic = prepared.iter().next().unwrap();
 

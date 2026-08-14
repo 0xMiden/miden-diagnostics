@@ -3,7 +3,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use core::{error::Error, fmt, ops::Range};
+use core::{error::Error, fmt};
 
 use annotate_snippets::{
     Annotation, AnnotationKind, Group, Level, Origin, Patch, Renderer, Snippet,
@@ -395,13 +395,12 @@ impl<'a> Preflight<'a> {
             }
         } else {
             for offset in [range.start(), range.end()] {
-                let location = self.sources.line_column(span.source(), offset).ok_or(
+                let _location = self.sources.line_column(span.source(), offset).ok_or(
                     RenderError::MetadataLocationUnavailable {
                         source: span.source(),
                         offset,
                     },
                 )?;
-                checked_location(span.source(), location)?;
             }
         }
         Ok(())
@@ -509,7 +508,7 @@ impl<'a> Preflight<'a> {
                     } else {
                         AnnotationKind::Context
                     };
-                    let range = usize_range(label.span.range());
+                    let range = label.span.range().into_slice_index();
                     let annotation = kind
                         .span(range)
                         .label(label.message.as_deref().map(normalize_display_text));
@@ -529,7 +528,8 @@ impl<'a> Preflight<'a> {
                         source: key,
                         offset: first.span.range().start(),
                     })?;
-                let (line, column) = checked_location(key, first_location)?;
+                let line = first_location.line().to_usize();
+                let column = first_location.column().to_usize();
                 group = group.element(
                     Origin::path(slot.display_name.clone()).line(line).char_column(column),
                 );
@@ -620,7 +620,7 @@ impl<'a> Preflight<'a> {
                 Snippet::<Patch<'a>>::source(text).path(slot.display_name.clone()).fold(false);
             for (_, edit) in edits {
                 snippet = snippet.patch(Patch::new(
-                    usize_range(edit.span.range()),
+                    edit.span.range().into_slice_index(),
                     normalize_display_text(&edit.replacement),
                 ));
             }
@@ -733,23 +733,7 @@ fn source_disambiguator(key: SourceKey) -> String {
         SourceKey::Session(id) => ("session", id),
         SourceKey::Attached(id) => ("attached", id),
     };
-    format!("{kind} {}:{}", id.namespace().0, id.local())
-}
-
-fn checked_location(
-    source: SourceKey,
-    location: LineColumn,
-) -> Result<(usize, usize), RenderError> {
-    let line = usize::try_from(location.line())
-        .map_err(|_| RenderError::MetadataCoordinateOverflow { source, location })?;
-    let column = usize::try_from(location.column())
-        .map_err(|_| RenderError::MetadataCoordinateOverflow { source, location })?;
-    Ok((line, column))
-}
-
-fn usize_range(range: TextRange) -> Range<usize> {
-    usize::try_from(range.start()).expect("u32 offsets fit every supported usize")
-        ..usize::try_from(range.end()).expect("u32 offsets fit every supported usize")
+    format!("{kind} {}:{}", id.namespace(), id.local())
 }
 
 /// Replaces terminal controls in a user-derived display field, preserving LF.

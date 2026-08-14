@@ -355,7 +355,6 @@ fn prepare_root(
         limits,
         items: 0,
         text_bytes: 0,
-        active_diagnostics: Vec::new(),
     };
     let mut snapshot = state.prepare_diagnostic(
         diagnostic,
@@ -369,6 +368,7 @@ fn prepare_root(
         0,
         0,
         None,
+        &[],
     )?;
     for context in contexts.iter().rev() {
         state.add_item()?;
@@ -392,7 +392,6 @@ struct PreparationState {
     limits: PreparationLimits,
     items: usize,
     text_bytes: usize,
-    active_diagnostics: Vec<*const ()>,
 }
 
 impl PreparationState {
@@ -403,6 +402,7 @@ impl PreparationState {
         related_depth: usize,
         diagnostic_source_depth: usize,
         incoming: Option<DiagnosticRelation>,
+        active_diagnostics: &[&dyn Diagnostic],
     ) -> Result<DiagnosticSnapshot, PrepareError> {
         if related_depth > self.limits.max_related_depth {
             return Err(PrepareError::RelatedDepthExceeded {
@@ -417,8 +417,7 @@ impl PreparationState {
             });
         }
 
-        let pointer = (diagnostic as *const dyn Diagnostic).cast::<()>();
-        if self.active_diagnostics.iter().any(|active| core::ptr::eq(*active, pointer)) {
+        if active_diagnostics.iter().any(|active| core::ptr::eq(*active, diagnostic)) {
             let relation = incoming.unwrap_or(DiagnosticRelation::Related);
             let depth = match relation {
                 DiagnosticRelation::Related => related_depth,
@@ -426,16 +425,18 @@ impl PreparationState {
             };
             return Err(PrepareError::DiagnosticCycle { relation, depth });
         }
-        self.active_diagnostics.push(pointer);
-
-        let result = self.prepare_active_diagnostic(
+        // Keep full trait-object references in this invocation-local stack. Comparing full trait
+        // objects includes their vtables, so a diagnostic and an embedded field at the same data
+        // address are not mistaken for a cycle.
+        let mut active_diagnostics = active_diagnostics.to_vec();
+        active_diagnostics.push(diagnostic);
+        self.prepare_active_diagnostic(
             diagnostic,
             metadata,
             related_depth,
             diagnostic_source_depth,
-        );
-        self.active_diagnostics.pop();
-        result
+            &active_diagnostics,
+        )
     }
 
     fn prepare_active_diagnostic(
@@ -444,6 +445,7 @@ impl PreparationState {
         metadata: SnapshotMetadata<'_>,
         related_depth: usize,
         diagnostic_source_depth: usize,
+        active_diagnostics: &[&dyn Diagnostic],
     ) -> Result<DiagnosticSnapshot, PrepareError> {
         self.add_item()?;
         let code = metadata
@@ -471,6 +473,7 @@ impl PreparationState {
             related: Vec::new(),
             related_depth,
             diagnostic_source_depth,
+            active_diagnostics,
             error: None,
         };
         diagnostic.visit(&mut visitor);
@@ -523,6 +526,7 @@ impl PreparationState {
                         related_depth,
                         next_depth,
                         Some(DiagnosticRelation::DiagnosticSource),
+                        active_diagnostics,
                     )
                     .map(Box::new)
             })
@@ -691,8 +695,9 @@ impl fmt::Write for BoundedTextWriter {
     }
 }
 
-struct SnapshotVisitor<'a> {
+struct SnapshotVisitor<'a, 'diagnostic> {
     state: &'a mut PreparationState,
+    active_diagnostics: &'diagnostic [&'diagnostic dyn Diagnostic],
     labels: Vec<OwnedLabel>,
     notes: Vec<OwnedNote>,
     suggestions: Vec<OwnedSuggestion>,
@@ -702,7 +707,7 @@ struct SnapshotVisitor<'a> {
     error: Option<PrepareError>,
 }
 
-impl SnapshotVisitor<'_> {
+impl SnapshotVisitor<'_, '_> {
     fn capture_arguments(
         &mut self,
         kind: PreparationItemKind,
@@ -725,9 +730,15 @@ impl SnapshotVisitor<'_> {
     }
 }
 
-impl VisitDiagnostic for SnapshotVisitor<'_> {
+impl VisitDiagnostic for SnapshotVisitor<'_, '_> {
     fn label(&mut self, label: Label<'_>) {
         if self.error.is_some() {
+            return;
+        }
+        // Unknown and synthetic spans deliberately carry no resolvable source provenance. They
+        // are useful sentinels in diagnostics that may or may not have source context, but must
+        // not turn an otherwise renderable message into a missing-source failure.
+        if label.span.is_unknown() || label.span.is_synthetic() {
             return;
         }
         let result = (|| {
@@ -823,6 +834,7 @@ impl VisitDiagnostic for SnapshotVisitor<'_> {
                 next_depth,
                 self.diagnostic_source_depth,
                 Some(DiagnosticRelation::Related),
+                self.active_diagnostics,
             )
             .map(|snapshot| self.related.push(snapshot));
         self.fail(result);

@@ -16,15 +16,20 @@ rust-version.workspace = true
 [features]
 default = ["std", "derive"]
 std = ["annotate-snippets/std"]
+arbitrary = ["std", "dep:proptest"]
 derive = ["dep:miden-diagnostics-macros"]
 simd = ["annotate-snippets/simd"]
 embed-explanations = []
 linked-registry = ["std", "dep:inventory"]
+zerocopy = ["dep:zerocopy"]
 
 [dependencies]
 annotate-snippets = { version = "=0.12.16", default-features = false }
-inventory = { version = "=0.3.24", optional = true }
+inventory = { version = "0.3", optional = true }
 miden-diagnostics-macros = { version = "1.0.0-alpha.1", path = "../diagnostics-macros", optional = true }
+paste = "1.0"
+proptest = { workspace = true, optional = true }
+zerocopy = { version = "0.8", optional = true, default-features = false, features = ["derive"] }
 
 [dev-dependencies]
 annotate-snippets = { version = "=0.12.16", default-features = false, features = ["testing-colors"] }

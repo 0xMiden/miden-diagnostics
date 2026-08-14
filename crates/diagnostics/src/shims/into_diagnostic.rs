@@ -5,13 +5,14 @@ use crate::Report;
 ///
 /// ## Warning
 ///
-/// Calling this on a type implementing [`Diagnostic`] will reduce it to the common denominator of
-/// [`core::error::Error`]. Meaning all extra information provided by [`Diagnostic`] will be
-/// inaccessible. If you have a type implementing [`Diagnostic`] consider simply returning it or
+/// Calling this on a type implementing [`crate::Diagnostic`] will reduce it to the common
+/// denominator of [`core::error::Error`]. Meaning all extra information provided by
+/// [`crate::Diagnostic`] will be inaccessible. If you have a type implementing
+/// [`crate::Diagnostic`] consider simply returning it or
 /// using [`Into`] or the [`Try`](core::ops::Try) operator (`?`).
 pub trait IntoDiagnostic<T, E> {
     /// Converts [`Result`] types that return regular [`core::error::Error`]s into a [`Result`]
-    /// that returns a [`Diagnostic`].
+    /// that returns a [`crate::Diagnostic`].
     fn into_diagnostic(self) -> Result<T, Report>;
 }
 

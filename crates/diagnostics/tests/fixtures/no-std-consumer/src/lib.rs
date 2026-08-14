@@ -65,7 +65,7 @@ impl Diagnostic for Fatal {
 }
 
 pub fn exercise() -> usize {
-    let mut sources = SourceMap::new(SourceNamespace(42));
+    let mut sources = SourceMap::new(SourceNamespace::new_unchecked(42));
     let source = sources
         .insert("portable.masm", "warn\n", Some(SourceRevision(1)))
         .expect("small fixture source must fit");
@@ -73,7 +73,7 @@ pub fn exercise() -> usize {
     assert_eq!(
         sources
             .line_column(source, 5)
-            .map(|location| { (location.line(), location.column()) }),
+            .map(|location| (location.line().to_u32(), location.column().to_u32())),
         Some((2, 1))
     );
 
