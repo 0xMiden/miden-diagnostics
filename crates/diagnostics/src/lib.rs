@@ -61,8 +61,9 @@ pub use snapshot::{
 };
 pub use source::{
     ColumnIndex, ColumnNumber, LayeredSourceProvider, LineColumn, LineIndex, LineNumber,
-    ResolvedSource, Source, SourceId, SourceKey, SourceMap, SourceMapError, SourceNamespace,
-    SourceProvider, SourceRevision, SourceSpan, Span, Spanned, TextRange, TextRangeError,
+    ResolvedSource, SharedSourceProvider, Source, SourceId, SourceKey, SourceMap, SourceMapError,
+    SourceNamespace, SourceProvider, SourceRevision, SourceSpan, Span, Spanned, TextRange,
+    TextRangeError,
 };
 #[cfg(feature = "std")]
 pub use terminal::{StderrEmitter, StdoutEmitter, TerminalChoice, TerminalPolicy, TerminalWidth};

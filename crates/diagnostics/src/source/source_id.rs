@@ -1,5 +1,8 @@
 use core::num::NonZeroU32;
 
+#[cfg(feature = "std")]
+static NEXT_SOURCE_NAMESPACE: std::sync::Mutex<u32> = std::sync::Mutex::new(u32::MAX);
+
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct SourceRevision(pub u32);
 
@@ -46,6 +49,33 @@ impl SourceNamespace {
     /// Returns true if this represents an invalid/unknown source namespace
     pub const fn is_unknown(self) -> bool {
         self.0.is_none()
+    }
+
+    /// Allocates a process-local namespace distinct from previous calls to this function.
+    ///
+    /// Explicitly chosen namespaces remain caller-coordinated and should not use the high,
+    /// descending range reserved by this allocator.
+    #[cfg(feature = "std")]
+    pub fn fresh() -> Option<Self> {
+        let mut next =
+            NEXT_SOURCE_NAMESPACE.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let value = NonZeroU32::new(*next)?;
+        *next = value.get().saturating_sub(1);
+        Some(Self::new(value))
+    }
+}
+
+#[cfg(all(test, feature = "std"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fresh_namespaces_are_known_and_distinct() {
+        let first = SourceNamespace::fresh().unwrap();
+        let second = SourceNamespace::fresh().unwrap();
+        assert!(!first.is_unknown());
+        assert!(!second.is_unknown());
+        assert_ne!(first, second);
     }
 }
 

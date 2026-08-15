@@ -879,6 +879,34 @@ fn attached_display_and_explicit_preparation_limits_are_supported() {
 }
 
 #[test]
+fn diagnostic_sets_prepare_with_each_occurrences_retained_session_sources() {
+    let mut first_sources = SourceMap::new(SourceNamespace::new_unchecked(24));
+    let first_id = first_sources.insert("first.masm", "bad first", None).unwrap();
+    let first = OwnedDiagnostic::new(MissingLocated(SourceSpan::session(first_id, range(0, 3))))
+        .attach_session_sources(first_sources);
+
+    let mut second_sources = SourceMap::new(SourceNamespace::new_unchecked(25));
+    let second_id = second_sources.insert("second.masm", "bad second", None).unwrap();
+    let second = OwnedDiagnostic::new(MissingLocated(SourceSpan::session(second_id, range(0, 3))))
+        .attach_session_sources(second_sources);
+
+    let mut collector = DiagnosticCollector::new();
+    collector.add_owned(first);
+    collector.add_owned(second);
+    let diagnostics = collector.finish();
+    let prepared = diagnostics.prepare_attached().unwrap();
+    let rendered = prepared
+        .iter()
+        .map(|diagnostic| AnnotateRenderer::default().render(diagnostic).unwrap())
+        .collect::<Vec<_>>();
+
+    assert!(rendered[0].contains("first.masm"));
+    assert!(rendered[0].contains("bad first"));
+    assert!(rendered[1].contains("second.masm"));
+    assert!(rendered[1].contains("bad second"));
+}
+
+#[test]
 fn renderer_lowers_full_semantics_and_never_reads_explanations() {
     let (session, set, ..) = rich_prepared();
     let prepared = set.prepare(&session).unwrap();

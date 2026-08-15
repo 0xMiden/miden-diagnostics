@@ -307,6 +307,20 @@ pub(crate) fn prepare_owned_ref_with_limits(
 }
 
 impl DiagnosticSet {
+    /// Prepares this set using the session and attached source providers retained by each
+    /// diagnostic occurrence.
+    pub fn prepare_attached(&self) -> Result<PreparedSet<'_>, PrepareError> {
+        self.prepare_attached_with_limits(PreparationLimits::default())
+    }
+
+    /// Prepares this set using retained providers and explicit resource limits.
+    pub fn prepare_attached_with_limits(
+        &self,
+        limits: PreparationLimits,
+    ) -> Result<PreparedSet<'_>, PrepareError> {
+        self.prepare_entries_with_limits(None, limits)
+    }
+
     pub fn prepare<'a>(
         &'a self,
         session_sources: &'a dyn SourceProvider,
@@ -317,6 +331,14 @@ impl DiagnosticSet {
     pub fn prepare_with_limits<'a>(
         &'a self,
         session_sources: &'a dyn SourceProvider,
+        limits: PreparationLimits,
+    ) -> Result<PreparedSet<'a>, PrepareError> {
+        self.prepare_entries_with_limits(Some(session_sources), limits)
+    }
+
+    fn prepare_entries_with_limits<'a>(
+        &'a self,
+        session_sources: Option<&'a dyn SourceProvider>,
         limits: PreparationLimits,
     ) -> Result<PreparedSet<'a>, PrepareError> {
         let mut diagnostics = Vec::with_capacity(self.len());
@@ -333,9 +355,15 @@ impl DiagnosticSet {
                 .diagnostic
                 .attached_sources()
                 .map(|sources| sources as &dyn SourceProvider);
+            let session = session_sources.unwrap_or_else(|| {
+                entry
+                    .diagnostic
+                    .session_sources()
+                    .map_or(&EMPTY_SOURCE_PROVIDER as &dyn SourceProvider, |sources| sources)
+            });
             diagnostics.push(PreparedDiagnostic {
                 snapshot,
-                sources: LayeredSourceProvider::new(session_sources, attached),
+                sources: LayeredSourceProvider::new(session, attached),
             });
         }
         Ok(PreparedSet {

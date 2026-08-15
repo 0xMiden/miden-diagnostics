@@ -2,6 +2,7 @@ mod line_column;
 mod source_id;
 mod span;
 
+use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::fmt;
 
 pub use self::{
@@ -32,6 +33,72 @@ pub trait SourceProvider {
     fn get(&self, id: SourceId) -> Option<Source<'_>>;
 
     fn line_column(&self, id: SourceId, offset: u32) -> Option<LineColumn>;
+
+    /// Returns the most recently registered source with the given display name, if supported.
+    ///
+    /// Display names are not required to be unique. Providers which do not maintain a reverse
+    /// index may leave this operation unsupported.
+    fn find_by_name(&self, _display_name: &str) -> Option<SourceId> {
+        None
+    }
+}
+
+/// A cloneable, type-erased source provider suitable for retaining with owned diagnostics.
+#[derive(Clone)]
+pub struct SharedSourceProvider {
+    inner: Arc<dyn SourceProvider + Send + Sync + 'static>,
+}
+
+impl SharedSourceProvider {
+    pub fn new<P>(provider: Arc<P>) -> Self
+    where
+        P: SourceProvider + Send + Sync + 'static,
+    {
+        Self { inner: provider }
+    }
+
+    pub fn from_arc(provider: Arc<dyn SourceProvider + Send + Sync + 'static>) -> Self {
+        Self { inner: provider }
+    }
+
+    pub fn as_provider(&self) -> &(dyn SourceProvider + Send + Sync + 'static) {
+        self.inner.as_ref()
+    }
+}
+
+impl<P> From<Arc<P>> for SharedSourceProvider
+where
+    P: SourceProvider + Send + Sync + 'static,
+{
+    fn from(provider: Arc<P>) -> Self {
+        Self::new(provider)
+    }
+}
+
+impl From<Arc<dyn SourceProvider + Send + Sync + 'static>> for SharedSourceProvider {
+    fn from(provider: Arc<dyn SourceProvider + Send + Sync + 'static>) -> Self {
+        Self::from_arc(provider)
+    }
+}
+
+impl fmt::Debug for SharedSourceProvider {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("SharedSourceProvider(..)")
+    }
+}
+
+impl SourceProvider for SharedSourceProvider {
+    fn get(&self, id: SourceId) -> Option<Source<'_>> {
+        self.inner.get(id)
+    }
+
+    fn line_column(&self, id: SourceId, offset: u32) -> Option<LineColumn> {
+        self.inner.line_column(id, offset)
+    }
+
+    fn find_by_name(&self, display_name: &str) -> Option<SourceId> {
+        self.inner.find_by_name(display_name)
+    }
 }
 
 impl<P> SourceProvider for &P
@@ -44,6 +111,10 @@ where
 
     fn line_column(&self, id: SourceId, offset: u32) -> Option<LineColumn> {
         (**self).line_column(id, offset)
+    }
+
+    fn find_by_name(&self, display_name: &str) -> Option<SourceId> {
+        (**self).find_by_name(display_name)
     }
 }
 
@@ -58,6 +129,10 @@ where
     fn line_column(&self, id: SourceId, offset: u32) -> Option<LineColumn> {
         (**self).line_column(id, offset)
     }
+
+    fn find_by_name(&self, display_name: &str) -> Option<SourceId> {
+        (**self).find_by_name(display_name)
+    }
 }
 
 impl<P> SourceProvider for Box<P>
@@ -71,6 +146,10 @@ where
     fn line_column(&self, id: SourceId, offset: u32) -> Option<LineColumn> {
         (**self).line_column(id, offset)
     }
+
+    fn find_by_name(&self, display_name: &str) -> Option<SourceId> {
+        (**self).find_by_name(display_name)
+    }
 }
 
 impl<P> SourceProvider for Arc<P>
@@ -83,6 +162,10 @@ where
 
     fn line_column(&self, id: SourceId, offset: u32) -> Option<LineColumn> {
         (**self).line_column(id, offset)
+    }
+
+    fn find_by_name(&self, display_name: &str) -> Option<SourceId> {
+        (**self).find_by_name(display_name)
     }
 }
 
@@ -188,15 +271,16 @@ struct SourceRecord {
 }
 
 /// Built-in owned source provider for `no_std + alloc` applications.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SourceMap {
     namespace: SourceNamespace,
     next_local: Option<u32>,
-    sources: Vec<SourceRecord>,
+    sources: Vec<Arc<SourceRecord>>,
 }
 
 impl SourceMap {
     pub const fn new(namespace: SourceNamespace) -> Self {
+        assert!(!namespace.is_unknown(), "source maps require a known namespace");
         Self {
             namespace,
             next_local: Some(0),
@@ -216,6 +300,15 @@ impl SourceMap {
         self.sources.is_empty()
     }
 
+    /// Returns the most recently inserted source with the given display name.
+    pub fn find_by_name(&self, display_name: &str) -> Option<SourceId> {
+        self.sources
+            .iter()
+            .rev()
+            .find(|source| source.display_name == display_name)
+            .map(|source| source.id)
+    }
+
     pub fn validate_source_len(bytes: usize) -> Result<u32, SourceMapError> {
         u32::try_from(bytes).map_err(|_| SourceMapError::SourceTooLarge { bytes })
     }
@@ -233,13 +326,13 @@ impl SourceMap {
         let line_starts = line_starts(&text, byte_len);
         let next_local = local.checked_add(1);
 
-        self.sources.push(SourceRecord {
+        self.sources.push(Arc::new(SourceRecord {
             id,
             display_name: display_name.into(),
             text,
             revision,
             line_starts,
-        });
+        }));
         self.next_local = next_local;
         Ok(id)
     }
@@ -249,7 +342,7 @@ impl SourceMap {
             return None;
         }
         let index = usize::try_from(id.local()).ok()?;
-        let record = self.sources.get(index)?;
+        let record = self.sources.get(index)?.as_ref();
         (record.id == id).then_some(record)
     }
 
@@ -288,6 +381,10 @@ impl SourceProvider for SourceMap {
             .ok()?
             .checked_add(1)?;
         LineColumn::new(line, column)
+    }
+
+    fn find_by_name(&self, display_name: &str) -> Option<SourceId> {
+        SourceMap::find_by_name(self, display_name)
     }
 }
 
@@ -340,7 +437,7 @@ fn line_column_from_text(text: &str, offset: u32) -> Option<LineColumn> {
 
 #[cfg(test)]
 mod tests {
-    use alloc::string::ToString;
+    use alloc::{format, string::ToString};
 
     use super::*;
 
@@ -392,6 +489,44 @@ mod tests {
                 Err(SourceMapError::SourceTooLarge { bytes: too_large })
             );
         }
+    }
+
+    #[test]
+    fn source_map_clone_is_an_immutable_snapshot() {
+        let namespace = SourceNamespace::new_unchecked(7);
+        let mut sources = SourceMap::new(namespace);
+        let first = sources.insert("module.masm", "begin\nend", None).unwrap();
+        let snapshot = sources.clone();
+
+        let latest = sources.insert("module.masm", "begin\nnop\nend", None).unwrap();
+
+        assert_eq!(snapshot.len(), 1);
+        assert_eq!(snapshot.find_by_name("module.masm"), Some(first));
+        assert_eq!(sources.find_by_name("module.masm"), Some(latest));
+        assert!(snapshot.get(latest).is_none());
+        assert_eq!(snapshot.get(first).unwrap().text, Some("begin\nend"));
+    }
+
+    #[test]
+    #[should_panic(expected = "source maps require a known namespace")]
+    fn source_map_rejects_the_reserved_unknown_namespace() {
+        let _ = SourceMap::new(SourceNamespace::UNKNOWN);
+    }
+
+    #[test]
+    fn shared_source_provider_delegates_and_hides_implementation_details() {
+        let mut sources = SourceMap::new(SourceNamespace::new_unchecked(8));
+        let id = sources.insert("module.masm", "begin\nend", None).unwrap();
+        let shared = SharedSourceProvider::from(Arc::new(sources));
+
+        assert_eq!(shared.get(id).unwrap().display_name, "module.masm");
+        assert_eq!(shared.line_column(id, 6), LineColumn::new(2, 1));
+        assert_eq!(shared.find_by_name("module.masm"), Some(id));
+        assert_eq!(format!("{shared:?}"), "SharedSourceProvider(..)");
+
+        let erased: Arc<dyn SourceProvider + Send + Sync> = Arc::new(shared);
+        let erased = SharedSourceProvider::from(erased);
+        assert_eq!(erased.find_by_name("module.masm"), Some(id));
     }
 
     #[test]
