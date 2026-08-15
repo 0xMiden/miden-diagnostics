@@ -5,6 +5,9 @@ use core::{
     ops::{Bound, Deref, DerefMut, Index, Range, RangeBounds},
 };
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 use super::*;
 
 /// A validated, half-open byte range.
@@ -269,7 +272,9 @@ impl<T: ?Sized + Spanned> Spanned for alloc::sync::Arc<T> {
 
 /// This type is used to wrap any `T` with a [SourceSpan], and is typically used when it is not
 /// convenient to add a [SourceSpan] to the type - most commonly because we don't control the type.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Span<T> {
+    #[cfg_attr(feature = "serde", serde(skip, default))]
     span: SourceSpan,
     spanned: T,
 }
