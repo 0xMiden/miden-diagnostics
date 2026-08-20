@@ -50,6 +50,35 @@ impl<T> Outcome<T> {
     }
 }
 
+impl<T, E> From<Result<T, E>> for Outcome<T>
+where
+    T: Default,
+    Report: From<E>,
+{
+    fn from(value: Result<T, E>) -> Self {
+        match value {
+            Ok(value) => Self::from(value),
+            Err(err) => {
+                let mut diagnostics = DiagnosticCollector::new();
+                diagnostics.add_report(Report::from(err));
+                Self {
+                    value: T::default(),
+                    diagnostics: diagnostics.finish(),
+                }
+            }
+        }
+    }
+}
+
+impl<T> From<T> for Outcome<T> {
+    fn from(value: T) -> Self {
+        Self {
+            value,
+            diagnostics: DiagnosticSet::default(),
+        }
+    }
+}
+
 /// Represents a type-erased diagnostic sink for use in libraries.
 ///
 /// This abstracts over how diagnostics are collected and reported by the parent application.

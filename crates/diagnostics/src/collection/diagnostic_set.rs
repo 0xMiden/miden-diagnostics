@@ -7,6 +7,15 @@ pub struct DiagnosticSet {
     counts: SeverityCounts,
 }
 
+impl Default for DiagnosticSet {
+    fn default() -> Self {
+        Self {
+            diagnostics: Box::default(),
+            counts: SeverityCounts::new(),
+        }
+    }
+}
+
 impl DiagnosticSet {
     pub(super) const fn from_parts(
         diagnostics: Box<[DiagnosticEntry]>,
