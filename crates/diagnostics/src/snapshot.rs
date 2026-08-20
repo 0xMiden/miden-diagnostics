@@ -266,6 +266,18 @@ impl<'set> PreparedSet<'set> {
     }
 }
 
+impl fmt::Display for PreparedSet<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use crate::{AnnotateRenderer, Emitter, FmtEmitter};
+
+        let mut formatter = FmtEmitter::new(f, AnnotateRenderer::default());
+        match formatter.emit_set(self) {
+            Ok(_) => Ok(()),
+            Err(err) => Err(err.error),
+        }
+    }
+}
+
 impl<'set, 'borrow> IntoIterator for &'borrow PreparedSet<'set> {
     type IntoIter = slice::Iter<'borrow, PreparedDiagnostic<'set>>;
     type Item = &'borrow PreparedDiagnostic<'set>;
