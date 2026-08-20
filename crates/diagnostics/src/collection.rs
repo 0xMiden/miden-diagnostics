@@ -51,6 +51,23 @@ impl<T> Outcome<T> {
 }
 
 impl<T> Outcome<Option<T>> {
+    /// Map the `Option<T>` value to an `Option<U>` value
+    pub fn map<U>(self, mapper: impl FnOnce(T) -> U) -> Outcome<Option<U>> {
+        Outcome {
+            value: self.value.map(mapper),
+            diagnostics: self.diagnostics,
+        }
+    }
+
+    /// Map the `Option<T>` value to an `Option<U>` value, using an operation that itself produces
+    /// an `Option`-wrapped output. If the mapper returns `None`, so does the resulting `Outcome`.
+    pub fn and_then<U>(self, mapper: impl FnOnce(T) -> Option<U>) -> Outcome<Option<U>> {
+        Outcome {
+            value: self.value.and_then(mapper),
+            diagnostics: self.diagnostics,
+        }
+    }
+
     /// Expect this outcome to have successfully produced a value of `T`, or panic with `message`
     ///
     /// Returns the `T` that was produced, and discards the diagnostics.
