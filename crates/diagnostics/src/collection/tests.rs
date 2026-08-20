@@ -450,11 +450,11 @@ fn policies_and_outcomes_preserve_identity_and_recovered_values() {
         value: "recovered".to_string(),
         diagnostics: set,
     }
-    .into_result(&WarningsAsErrors);
+    .into_result_with_policy(&WarningsAsErrors);
     assert!(assessed.is_err());
     let outcome = assessed.unwrap_err();
     assert_eq!(outcome.value, "recovered");
-    assert_matches!(outcome.into_result(&DefaultFailurePolicy), Ok(_));
+    assert_matches!(outcome.into_result_with_policy(&DefaultFailurePolicy), Ok(_));
 }
 
 #[test]

@@ -38,7 +38,7 @@ impl<T> Outcome<T> {
     }
 
     /// Convert this outcome into a [Result] based on the provided [FailurePolicy].
-    pub fn into_result<P>(self, policy: &P) -> Result<Self, Self>
+    pub fn into_result_with_policy<P>(self, policy: &P) -> Result<Self, Self>
     where
         P: FailurePolicy + ?Sized,
     {
@@ -51,6 +51,16 @@ impl<T> Outcome<T> {
 }
 
 impl<T> Outcome<Option<T>> {
+    /// Returns true if this outcome represents success
+    pub fn is_ok(&self) -> bool {
+        self.value.is_some() && !self.diagnostics.assess(&DefaultFailurePolicy)
+    }
+
+    /// Returns true if this outcome represents failure
+    pub fn is_err(&self) -> bool {
+        !self.is_ok()
+    }
+
     /// Map the `Option<T>` value to an `Option<U>` value
     pub fn map<U>(self, mapper: impl FnOnce(T) -> U) -> Outcome<Option<U>> {
         Outcome {
@@ -68,11 +78,19 @@ impl<T> Outcome<Option<T>> {
         }
     }
 
+    /// Unwrap a successful outcome/value of type `T`, or panic.
+    #[track_caller]
+    pub fn unwrap(self) -> T {
+        assert!(self.is_ok());
+        self.value.unwrap()
+    }
+
     /// Expect this outcome to have successfully produced a value of `T`, or panic with `message`
     ///
     /// Returns the `T` that was produced, and discards the diagnostics.
     #[track_caller]
     pub fn expect(self, message: &str) -> T {
+        assert!(self.is_ok());
         self.value.expect(message)
     }
 
@@ -81,10 +99,22 @@ impl<T> Outcome<Option<T>> {
     /// Returns the diagnostics associated with this outcome
     #[track_caller]
     pub fn expect_err(self, message: &str) -> DiagnosticSet {
-        if self.value.is_some() {
+        if self.is_ok() {
             panic!("{message}");
         }
         self.diagnostics
+    }
+
+    /// Convert this outcome into a `Result<T, DiagnosticSet>` using the default failure policy
+    ///
+    /// `None` is converted to `Err`, even if no diagnostics were raised.
+    pub fn into_result(self) -> Result<T, DiagnosticSet> {
+        let Self { value, diagnostics } = self;
+        if diagnostics.assess(&DefaultFailurePolicy) {
+            return Err(diagnostics);
+        }
+
+        value.ok_or(diagnostics)
     }
 }
 
