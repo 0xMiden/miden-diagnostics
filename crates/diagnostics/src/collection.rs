@@ -50,6 +50,27 @@ impl<T> Outcome<T> {
     }
 }
 
+impl<T> Outcome<Option<T>> {
+    /// Expect this outcome to have successfully produced a value of `T`, or panic with `message`
+    ///
+    /// Returns the `T` that was produced, and discards the diagnostics.
+    #[track_caller]
+    pub fn expect(self, message: &str) -> T {
+        self.value.expect(message)
+    }
+
+    /// Expect this outcome to have failed to produce a value of `T`, or panic with `message`
+    ///
+    /// Returns the diagnostics associated with this outcome
+    #[track_caller]
+    pub fn expect_err(self, message: &str) -> DiagnosticSet {
+        if self.value.is_some() {
+            panic!("{message}");
+        }
+        self.diagnostics
+    }
+}
+
 impl<T, E> From<Result<T, E>> for Outcome<T>
 where
     T: Default,
