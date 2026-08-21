@@ -23,11 +23,11 @@ fn analyze(input: String) -> Session {
     // Parsing can recover a value alongside diagnostics. Policy conversion
     // keeps both, while making the application's "safe to evaluate" decision
     // explicit.
-    let (expression, front_end_diagnostics) =
-        match parsed.into_result_with_policy(&DefaultFailurePolicy) {
-            Ok(parsed) => (parsed.value, parsed.diagnostics),
-            Err(parsed) => (None, parsed.diagnostics),
-        };
+    let (expression, front_end_diagnostics) = if parsed.is_ok_with_policy(&DefaultFailurePolicy) {
+        (parsed.value, parsed.diagnostics)
+    } else {
+        (None, parsed.diagnostics)
+    };
     let mut diagnostics = DiagnosticCollector::new();
     let _ = diagnostics.merge(front_end_diagnostics);
     // The evaluator is deliberately fail-fast. Capture promotes its Report
@@ -61,12 +61,12 @@ fn main() -> ExitWithOutcome<Option<i64>> {
         for descriptor in diagnostics::REGISTRY.iter() {
             println!("{}: {}", descriptor.code, descriptor.summary);
         }
-        return empty_outcome().into_exit();
+        return empty_outcome().into();
     }
 
     let Session { outcome, sources } = analyze(input);
     if let Some(value) = outcome.value {
         println!("result: {value}");
     }
-    outcome.into_exit().with_sources(sources)
+    ExitWithOutcome::from(outcome).with_sources(sources)
 }

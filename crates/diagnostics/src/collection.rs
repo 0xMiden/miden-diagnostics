@@ -31,49 +31,39 @@ pub struct Outcome<T> {
 }
 
 impl<T> Outcome<T> {
-    /// Converts this outcome into the std application's rich termination path.
-    #[cfg(feature = "std")]
-    pub fn into_exit(self) -> crate::ExitWithOutcome<T> {
-        crate::ExitWithOutcome::new(self)
-    }
-
-    /// Convert this outcome into a [Result] based on the provided [FailurePolicy].
-    pub fn into_result_with_policy<P>(self, policy: &P) -> Result<Self, Self>
-    where
-        P: FailurePolicy + ?Sized,
-    {
-        if self.diagnostics.assess(policy) {
-            Err(self)
-        } else {
-            Ok(self)
-        }
-    }
-}
-
-impl<T> Outcome<Option<T>> {
-    /// Returns true if this outcome represents success
+    /// Returns true if this outcome represents success according to the default failure policy
+    #[inline]
     pub fn is_ok(&self) -> bool {
-        self.value.is_some() && !self.diagnostics.assess(&DefaultFailurePolicy)
+        self.is_ok_with_policy(&DefaultFailurePolicy)
     }
 
-    /// Returns true if this outcome represents failure
+    /// Returns true if this outcome represents success according to `policy`
+    pub fn is_ok_with_policy<P>(&self, policy: &P) -> bool
+    where
+        P: ?Sized + FailurePolicy,
+    {
+        self.diagnostics.assess(policy)
+    }
+
+    /// Returns true if this outcome represents failure according to the default failure policy
+    #[inline]
     pub fn is_err(&self) -> bool {
         !self.is_ok()
     }
 
-    /// Map the `Option<T>` value to an `Option<U>` value
-    pub fn map<U>(self, mapper: impl FnOnce(T) -> U) -> Outcome<Option<U>> {
-        Outcome {
-            value: self.value.map(mapper),
-            diagnostics: self.diagnostics,
-        }
+    /// Returns true if this outcome represents failure according to `policy`
+    #[inline]
+    pub fn is_err_with_policy<P>(&self, policy: &P) -> bool
+    where
+        P: ?Sized + FailurePolicy,
+    {
+        !self.is_ok_with_policy(policy)
     }
 
-    /// Map the `Option<T>` value to an `Option<U>` value, using an operation that itself produces
-    /// an `Option`-wrapped output. If the mapper returns `None`, so does the resulting `Outcome`.
-    pub fn and_then<U>(self, mapper: impl FnOnce(T) -> Option<U>) -> Outcome<Option<U>> {
+    /// Transform the value associated with this outcome, preserving the diagnostics
+    pub fn map<U>(self, mapper: impl FnOnce(T) -> U) -> Outcome<U> {
         Outcome {
-            value: self.value.and_then(mapper),
+            value: mapper(self.value),
             diagnostics: self.diagnostics,
         }
     }
@@ -81,8 +71,7 @@ impl<T> Outcome<Option<T>> {
     /// Unwrap a successful outcome/value of type `T`, or panic.
     #[track_caller]
     pub fn unwrap(self) -> T {
-        assert!(self.is_ok());
-        self.value.unwrap()
+        self.into_result().unwrap()
     }
 
     /// Expect this outcome to have successfully produced a value of `T`, or panic with `message`
@@ -90,8 +79,7 @@ impl<T> Outcome<Option<T>> {
     /// Returns the `T` that was produced, and discards the diagnostics.
     #[track_caller]
     pub fn expect(self, message: &str) -> T {
-        assert!(self.is_ok());
-        self.value.expect(message)
+        self.into_result().expect(message)
     }
 
     /// Expect this outcome to have failed to produce a value of `T`, or panic with `message`
@@ -105,16 +93,41 @@ impl<T> Outcome<Option<T>> {
         self.diagnostics
     }
 
-    /// Convert this outcome into a `Result<T, DiagnosticSet>` using the default failure policy
-    ///
-    /// `None` is converted to `Err`, even if no diagnostics were raised.
-    pub fn into_result(self) -> Result<T, DiagnosticSet> {
-        let Self { value, diagnostics } = self;
-        if diagnostics.assess(&DefaultFailurePolicy) {
-            return Err(diagnostics);
-        }
+    /// Convert this outcome into a `Result<T, Report>` using the default failure policy
+    pub fn into_result(self) -> Result<T, Report> {
+        self.into_result_with_policy(&DefaultFailurePolicy)
+    }
 
-        value.ok_or(diagnostics)
+    /// Convert this outcome into a `Result<T, Report>` using the provided failure policy
+    pub fn into_result_with_policy<P>(self, policy: &P) -> Result<T, Report>
+    where
+        P: ?Sized + FailurePolicy,
+    {
+        if self.is_ok_with_policy(policy) {
+            Ok(self.value)
+        } else {
+            Err(self.diagnostics.into_report(policy))
+        }
+    }
+
+    /// Converts this outcome into the std application's rich termination path.
+    #[cfg(feature = "std")]
+    pub fn into_exit(self) -> crate::ExitWithOutcome<()> {
+        crate::ExitWithOutcome::new(Outcome {
+            value: (),
+            diagnostics: self.diagnostics,
+        })
+    }
+}
+
+impl<T> Outcome<Option<T>> {
+    /// Map the `Option<T>` value to an `Option<U>` value, using an operation that itself produces
+    /// an `Option`-wrapped output. If the mapper returns `None`, so does the resulting `Outcome`.
+    pub fn and_then<U>(self, mapper: impl FnOnce(T) -> Option<U>) -> Outcome<Option<U>> {
+        Outcome {
+            value: self.value.and_then(mapper),
+            diagnostics: self.diagnostics,
+        }
     }
 }
 

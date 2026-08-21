@@ -59,6 +59,12 @@ impl<T> ExitWithOutcome<T> {
     }
 }
 
+impl<T> From<Outcome<T>> for ExitWithOutcome<T> {
+    fn from(outcome: Outcome<T>) -> Self {
+        Self::new(outcome)
+    }
+}
+
 impl<T> Termination for ExitWithOutcome<T> {
     fn report(self) -> ExitCode {
         let Self {

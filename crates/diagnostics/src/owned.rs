@@ -783,6 +783,56 @@ impl<T: core::error::Error + 'static> Diagnostic for DiagnosticError<T> {
     }
 }
 
+/// Converts a set of independent diagnostics into a single diagnostic convertible to [Report]
+#[derive(Debug)]
+pub(crate) struct DiagnosticBundle {
+    primary: OwnedDiagnostic,
+    related: Vec<OwnedDiagnostic>,
+}
+
+impl DiagnosticBundle {
+    pub fn new(primary: OwnedDiagnostic, related: Vec<OwnedDiagnostic>) -> Self {
+        Self { primary, related }
+    }
+}
+
+impl Diagnostic for DiagnosticBundle {
+    fn message(&self, out: &mut dyn core::fmt::Write) -> core::fmt::Result {
+        self.primary.message(out)
+    }
+
+    fn descriptor(&self) -> Option<&'static DiagnosticDescriptor> {
+        self.primary.descriptor()
+    }
+
+    fn code(&self) -> Option<DiagnosticCodeRef<'_>> {
+        self.primary.code()
+    }
+
+    fn severity(&self) -> Severity {
+        self.primary.severity()
+    }
+
+    fn tags(&self) -> &[DiagnosticTag] {
+        self.primary.tags()
+    }
+
+    fn visit(&self, visitor: &mut dyn crate::VisitDiagnostic) {
+        self.primary.visit(visitor);
+        for diagnostic in &self.related {
+            visitor.related(diagnostic);
+        }
+    }
+
+    fn cause(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        self.primary.cause()
+    }
+
+    fn diagnostic_source(&self) -> Option<&dyn Diagnostic> {
+        self.primary.diagnostic_source()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use alloc::{boxed::Box, format, string::ToString};

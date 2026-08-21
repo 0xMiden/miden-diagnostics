@@ -1,3 +1,5 @@
+use crate::owned::DiagnosticBundle;
+
 use super::*;
 
 /// An immutable set of diagnostics.
@@ -79,6 +81,28 @@ impl DiagnosticSet {
         P: FailurePolicy + ?Sized,
     {
         self.diagnostics.iter().any(|entry| policy.is_failure(entry.metadata()))
+    }
+
+    #[doc(hidden)]
+    pub fn into_report<P>(self, policy: &P) -> Report
+    where
+        P: FailurePolicy + ?Sized,
+    {
+        let mut entries = self.into_vec();
+        let primary_index = entries
+            .iter()
+            .position(|entry| policy.is_failure(entry.metadata()))
+            .or((!entries.is_empty()).then_some(0));
+        let Some(primary_index) = primary_index else {
+            return Report::msg("operation failed without producing a diagnostic");
+        };
+        let primary = entries.remove(primary_index).diagnostic;
+        if entries.is_empty() {
+            return Report::from_diagnostic(primary);
+        }
+
+        let related = entries.into_iter().map(|entry| entry.diagnostic).collect();
+        Report::new(DiagnosticBundle::new(primary, related))
     }
 }
 
