@@ -446,8 +446,8 @@ fn policies_and_outcomes_preserve_identity_and_recovered_values() {
     assert!(set.assess(policy));
     assert!(set.assess(&FailCode));
 
-    let outcome = Outcome {
-        value: "recovered",
+    let outcome: Outcome<&str, ()> = Outcome {
+        result: Ok("recovered"),
         diagnostics: set,
     };
     assert!(outcome.is_err_with_policy(&WarningsAsErrors));

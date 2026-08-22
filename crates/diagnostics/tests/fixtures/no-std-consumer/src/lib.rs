@@ -82,26 +82,22 @@ pub fn exercise() -> usize {
     let warnings = warnings.finish();
     assert!(!warnings.assess(&DefaultFailurePolicy));
 
-    let warning_outcome = Outcome {
-        value: 7_usize,
+    let warning_outcome: Outcome<usize, ()> = Outcome {
+        result: Ok(7_usize),
         diagnostics: warnings,
     };
     let warning_outcome = warning_outcome
-        .into_result(&DefaultFailurePolicy)
+        .into_result_with_policy(&DefaultFailurePolicy)
         .expect("warnings succeed under the default policy");
-    assert_eq!(warning_outcome.value, 7);
+    assert_eq!(warning_outcome, 7);
 
     let mut failures = DiagnosticCollector::new();
     assert_eq!(failures.capture::<()>(Err(Report::new(Fatal))), None);
     let failures = failures.finish();
     assert!(failures.assess(&DefaultFailurePolicy));
 
-    let derived_code_bytes = Warning
-        .descriptor()
-        .expect("derived inline descriptor")
-        .code
-        .code
-        .len();
+    let derived_code_bytes =
+        Warning.descriptor().expect("derived inline descriptor").code.code.len();
     5 + derived_code_bytes + failures.counts().errors()
 }
 
@@ -112,10 +108,11 @@ pub fn exercise() -> usize {
 pub fn registry_probe() -> i32 {
     let mut bits = 0_i32;
 
-    let ordered = PORTABLE_REGISTRY
-        .iter()
-        .map(|descriptor| descriptor.code)
-        .eq([E1000.code, W2000.code, SECOND_E1000.code]);
+    let ordered = PORTABLE_REGISTRY.iter().map(|descriptor| descriptor.code).eq([
+        E1000.code,
+        W2000.code,
+        SECOND_E1000.code,
+    ]);
     if ordered && PORTABLE_REGISTRY.validate().is_ok() {
         bits |= 1 << 0;
     }
@@ -140,13 +137,9 @@ pub fn registry_probe() -> i32 {
     ) {
         bits |= 1 << 3;
     }
-    if matches!(
-        PORTABLE_REGISTRY.lookup("missing"),
-        Err(LookupError::UnknownCode)
-    ) && matches!(
-        PORTABLE_REGISTRY.lookup("portable/E1000/extra"),
-        Err(LookupError::UnknownCode)
-    ) {
+    if matches!(PORTABLE_REGISTRY.lookup("missing"), Err(LookupError::UnknownCode))
+        && matches!(PORTABLE_REGISTRY.lookup("portable/E1000/extra"), Err(LookupError::UnknownCode))
+    {
         bits |= 1 << 4;
     }
 

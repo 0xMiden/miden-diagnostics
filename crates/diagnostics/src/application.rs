@@ -144,7 +144,7 @@ mod tests {
         let mut collector = DiagnosticCollector::new();
         collector.add(diagnostic);
         Outcome {
-            value: (),
+            result: Ok(()),
             diagnostics: collector.finish(),
         }
     }

@@ -5,11 +5,11 @@ mod parser;
 mod syntax;
 
 use miden_diagnostics::{
-    DefaultFailurePolicy, DiagnosticCollector, ExitWithOutcome, Outcome, SourceMap, SourceNamespace,
+    DiagnosticCollector, ExitWithOutcome, Outcome, SourceMap, SourceNamespace,
 };
 
 struct Session {
-    outcome: Outcome<Option<i64>>,
+    outcome: Outcome<i64>,
     sources: SourceMap,
 }
 
@@ -19,39 +19,27 @@ fn analyze(input: String) -> Session {
         .insert("<expression>", input.clone(), None)
         .expect("the command-line expression must fit the u32 source model");
 
-    let parsed = parser::parse(source, &input);
     // Parsing can recover a value alongside diagnostics. Policy conversion
     // keeps both, while making the application's "safe to evaluate" decision
     // explicit.
-    let (expression, front_end_diagnostics) = if parsed.is_ok_with_policy(&DefaultFailurePolicy) {
-        (parsed.value, parsed.diagnostics)
-    } else {
-        (None, parsed.diagnostics)
-    };
-    let mut diagnostics = DiagnosticCollector::new();
-    let _ = diagnostics.merge(front_end_diagnostics);
+    //
     // The evaluator is deliberately fail-fast. Capture promotes its Report
     // back into this application-level diagnostic collection.
-    let value = expression
-        .and_then(|expression| diagnostics.capture(evaluator::evaluate(source, &expression)));
+    let outcome = parser::parse(source, &input).and_then(|expr, collector| {
+        collector.capture(evaluator::evaluate(source, &expr)).ok_or(())
+    });
 
-    Session {
-        outcome: Outcome {
-            value,
-            diagnostics: diagnostics.finish(),
-        },
-        sources,
-    }
+    Session { outcome, sources }
 }
 
-fn empty_outcome() -> Outcome<Option<i64>> {
+fn empty_outcome() -> Outcome<i64> {
     Outcome {
-        value: None,
+        result: Ok(0),
         diagnostics: DiagnosticCollector::new().finish(),
     }
 }
 
-fn main() -> ExitWithOutcome<Option<i64>> {
+fn main() -> ExitWithOutcome<i64> {
     diagnostics::REGISTRY
         .validate()
         .expect("the arithmetic diagnostic catalog must be valid");
@@ -65,7 +53,9 @@ fn main() -> ExitWithOutcome<Option<i64>> {
     }
 
     let Session { outcome, sources } = analyze(input);
-    if let Some(value) = outcome.value {
+    if let Ok(value) = outcome.result
+        && outcome.is_ok()
+    {
         println!("result: {value}");
     }
     ExitWithOutcome::from(outcome).with_sources(sources)

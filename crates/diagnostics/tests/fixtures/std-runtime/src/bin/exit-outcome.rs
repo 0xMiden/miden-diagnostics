@@ -8,13 +8,13 @@ use std_runtime::{
     MissingSource, PrepareFailure, SimpleDiagnostic, rich_report, rich_session_diagnostic,
 };
 
-fn collect(diagnostics: impl IntoIterator<Item = SimpleDiagnostic>) -> Outcome<&'static str> {
+fn collect(diagnostics: impl IntoIterator<Item = SimpleDiagnostic>) -> Outcome<&'static str, ()> {
     let mut collector = DiagnosticCollector::new();
     for diagnostic in diagnostics {
         collector.add(diagnostic);
     }
     Outcome {
-        value: "recovered",
+        result: Ok("recovered"),
         diagnostics: collector.finish(),
     }
 }
@@ -61,7 +61,7 @@ fn main() -> ExitWithOutcome<&'static str> {
             let mut collector = DiagnosticCollector::new();
             collector.push(rich_report().into_diagnostic());
             Outcome {
-                value: "recovered",
+                result: Ok::<_, ()>("recovered"),
                 diagnostics: collector.finish(),
             }
             .into_exit()
@@ -71,7 +71,7 @@ fn main() -> ExitWithOutcome<&'static str> {
             let mut collector = DiagnosticCollector::new();
             collector.add(diagnostic);
             Outcome {
-                value: "recovered",
+                result: Ok::<_, ()>("recovered"),
                 diagnostics: collector.finish(),
             }
             .into_exit()
@@ -81,7 +81,7 @@ fn main() -> ExitWithOutcome<&'static str> {
             let mut collector = DiagnosticCollector::new();
             collector.add(MissingSource);
             Outcome {
-                value: "recovered",
+                result: Ok::<_, ()>("recovered"),
                 diagnostics: collector.finish(),
             }
             .into_exit()
@@ -92,7 +92,7 @@ fn main() -> ExitWithOutcome<&'static str> {
                 OwnedDiagnostic::new(MissingSource).with_severity_override(Severity::Warning),
             );
             Outcome {
-                value: "recovered",
+                result: Ok::<_, ()>("recovered"),
                 diagnostics: collector.finish(),
             }
             .into_exit()
@@ -101,7 +101,7 @@ fn main() -> ExitWithOutcome<&'static str> {
             let mut collector = DiagnosticCollector::new();
             collector.push(Report::new(PrepareFailure).into_diagnostic());
             Outcome {
-                value: "recovered",
+                result: Ok::<_, ()>("recovered"),
                 diagnostics: collector.finish(),
             }
             .into_exit()
@@ -110,7 +110,7 @@ fn main() -> ExitWithOutcome<&'static str> {
             let mut collector = DiagnosticCollector::new();
             collector.push(rich_report().into_diagnostic());
             Outcome {
-                value: "recovered",
+                result: Ok::<_, ()>("recovered"),
                 diagnostics: collector.finish(),
             }
             .into_exit()

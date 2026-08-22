@@ -67,7 +67,7 @@ EXPR    ?=
 EXTRA   ?=
 
 define _CARGO_TEST
-	$(BACKTRACE) cargo test \
+	$(BACKTRACE) cargo nextest run \
 		$(if $(FEATURES),--features $(FEATURES),) \
 		$(if $(CRATE),-p $(CRATE),) \
 		$(EXTRA) $(EXPR)
@@ -80,7 +80,7 @@ core-test:
 
 ## Core: build test binaries only (no run)
 core-test-build:
-	$(BACKTRACE) cargo test --no-run \
+	$(BACKTRACE) cargo nextest run --no-run \
 		$(if $(FEATURES),--features $(FEATURES),) \
 		$(if $(CRATE),-p $(CRATE),) \
 		$(EXTRA) $(EXPR)

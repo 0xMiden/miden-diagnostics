@@ -10,16 +10,16 @@ use super::{
 
 /// Parse the complete input while retaining every warning or error produced
 /// by the front end.
-pub fn parse(source: SourceId, input: &str) -> Outcome<Option<Expr>> {
+pub fn parse(source: SourceId, input: &str) -> Outcome<Expr> {
     let mut diagnostics = DiagnosticCollector::new();
     let lexed = lexer::lex(source, input, &mut diagnostics);
     let expression = if lexed.had_errors {
-        None
+        Err(())
     } else {
-        Parser::new(source, &lexed.tokens, &mut diagnostics).parse()
+        Parser::new(source, &lexed.tokens, &mut diagnostics).parse().ok_or(())
     };
     Outcome {
-        value: expression,
+        result: expression,
         diagnostics: diagnostics.finish(),
     }
 }
