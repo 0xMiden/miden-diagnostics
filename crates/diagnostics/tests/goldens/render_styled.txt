@@ -1,0 +1,29 @@
+<ESC>[1m<ESC>[91merror[miden::parser/E0007]<ESC>[0m<ESC>[1m: unexpected token<ESC>[0m
+ <ESC>[1m<ESC>[94m--> <ESC>[0msame.masm [session 20:0]:1:1
+  <ESC>[1m<ESC>[94m|<ESC>[0m
+<ESC>[1m<ESC>[94m1<ESC>[0m <ESC>[1m<ESC>[94m|<ESC>[0m fn main() {}
+  <ESC>[1m<ESC>[94m|<ESC>[0m <ESC>[1m<ESC>[91m^^<ESC>[0m <ESC>[1m<ESC>[91munexpected<ESC>[0m
+  <ESC>[1m<ESC>[94m|<ESC>[0m
+ <ESC>[1m<ESC>[94m::: <ESC>[0msame.masm [attached 20:0]:1:1
+  <ESC>[1m<ESC>[94m|<ESC>[0m
+<ESC>[1m<ESC>[94m1<ESC>[0m <ESC>[1m<ESC>[94m|<ESC>[0m var value = 1
+  <ESC>[1m<ESC>[94m|<ESC>[0m <ESC>[1m<ESC>[94m---<ESC>[0m <ESC>[1m<ESC>[94mdeclared here<ESC>[0m
+  <ESC>[1m<ESC>[94m|<ESC>[0m
+  <ESC>[1m<ESC>[94m= <ESC>[0m<ESC>[1mnote<ESC>[0m: context: while parsing module
+  <ESC>[1m<ESC>[94m= <ESC>[0m<ESC>[1mnote<ESC>[0m: caused by: conventional cause
+  <ESC>[1m<ESC>[94m= <ESC>[0m<ESC>[1mnote<ESC>[0m: parser note
+  <ESC>[1m<ESC>[94m= <ESC>[0m<ESC>[1mhelp<ESC>[0m: parser help
+<ESC>[1m<ESC>[94minfo<ESC>[0m: caused by: inner source
+<ESC>[1m<ESC>[96mhelp<ESC>[0m: apply both edits
+  <ESC>[1m<ESC>[94m|<ESC>[0m
+  <ESC>[1m<ESC>[94m= <ESC>[0m<ESC>[1mnote<ESC>[0m: applicability: machine-applicable
+  <ESC>[1m<ESC>[94m|<ESC>[0m
+<ESC>[1m<ESC>[94m1<ESC>[0m <ESC>[91m- fn<ESC>[0m main() {}
+<ESC>[1m<ESC>[94m1<ESC>[0m <ESC>[92m+ proc<ESC>[0m main() {}
+  <ESC>[1m<ESC>[94m|<ESC>[0m
+ <ESC>[1m<ESC>[94m--> <ESC>[0msame.masm [attached 20:0]:1:1
+  <ESC>[1m<ESC>[94m|<ESC>[0m
+<ESC>[1m<ESC>[94m1<ESC>[0m <ESC>[91m- var<ESC>[0m value = 1
+<ESC>[1m<ESC>[94m1<ESC>[0m <ESC>[92m+ let<ESC>[0m value = 1
+  <ESC>[1m<ESC>[94m|<ESC>[0m
+<ESC>[1m<ESC>[94minfo<ESC>[0m: related: related message

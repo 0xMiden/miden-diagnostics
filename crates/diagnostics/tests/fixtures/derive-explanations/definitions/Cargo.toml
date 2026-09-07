@@ -1,0 +1,13 @@
+[package]
+name = "derive-definitions"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+diag_runtime = { package = "miden-diagnostics", path = "../../../..", default-features = false, features = ["derive"] }
+
+[[test]]
+name = "disabled"
+path = "tests/disabled.rs"

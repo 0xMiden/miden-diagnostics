@@ -1,0 +1,29 @@
+error[miden::parser/E0007]: unexpected token
+  ╭▸ same.masm [session 20:0]:1:1
+  │
+1 │ fn main() {}
+  │ ━━ unexpected
+  │
+  ⸬  same.masm [attached 20:0]:1:1
+  │
+1 │ var value = 1
+  │ ─── declared here
+  │
+  ├ note: context: while parsing module
+  ├ note: caused by: conventional cause
+  ├ note: parser note
+  ╰ help: parser help
+info: caused by: inner source
+help: apply both edits
+  │
+  ├ note: applicability: machine-applicable
+  ╭╴
+1 - fn main() {}
+1 + proc main() {}
+  │
+  ├▸ same.masm [attached 20:0]:1:1
+  │
+1 - var value = 1
+1 + let value = 1
+  ╰╴
+info: related: related message

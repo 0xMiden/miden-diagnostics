@@ -49,11 +49,11 @@ fix: ## Runs Fix with configs
 
 .PHONY: format
 format: ## Runs Format
-	cargo fmt --all
+	cargo +nightly fmt --all
 
 .PHONY: format-check
 format-check: ## Runs Format in check mode
-	cargo fmt --all --check
+	cargo +nightly fmt --all --check
 
 .PHONY: lint
 lint: format fix clippy ## Runs all linting tasks at once
@@ -67,7 +67,7 @@ EXPR    ?=
 EXTRA   ?=
 
 define _CARGO_TEST
-	$(BACKTRACE) cargo test \
+	$(BACKTRACE) cargo nextest run \
 		$(if $(FEATURES),--features $(FEATURES),) \
 		$(if $(CRATE),-p $(CRATE),) \
 		$(EXTRA) $(EXPR)
@@ -80,7 +80,7 @@ core-test:
 
 ## Core: build test binaries only (no run)
 core-test-build:
-	$(BACKTRACE) cargo test --no-run \
+	$(BACKTRACE) cargo nextest run --no-run \
 		$(if $(FEATURES),--features $(FEATURES),) \
 		$(if $(CRATE),-p $(CRATE),) \
 		$(EXTRA) $(EXPR)

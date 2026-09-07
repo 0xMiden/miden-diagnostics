@@ -1,0 +1,11 @@
+[package]
+name = "derive-discard"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97"
+publish = false
+
+[dependencies]
+diag_runtime = { package = "miden-diagnostics", path = "../../..", default-features = false, features = ["derive"] }
+
+[workspace]

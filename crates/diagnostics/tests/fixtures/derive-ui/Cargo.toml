@@ -1,0 +1,44 @@
+[package]
+name = "derive-ui"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97"
+publish = false
+autobins = false
+
+[dependencies]
+renamed_diagnostics = { package = "miden-diagnostics", path = "../../..", default-features = false, features = ["derive"] }
+
+[[bin]]
+name = "reject-attributes"
+path = "src/bin/reject-attributes.rs"
+
+[[bin]]
+name = "reject-primary-shape"
+path = "src/bin/reject-primary-shape.rs"
+
+[[bin]]
+name = "reject-spanned-shape"
+path = "src/bin/reject-spanned-shape.rs"
+
+[[bin]]
+name = "reject-warning-report"
+path = "src/bin/reject-warning-report.rs"
+
+[[bin]]
+name = "reject-info-report"
+path = "src/bin/reject-info-report.rs"
+
+[[bin]]
+name = "reject-hint-report"
+path = "src/bin/reject-hint-report.rs"
+
+[[bin]]
+name = "reject-code"
+path = "src/bin/reject-code.rs"
+
+[[bin]]
+name = "reject-declaration-code"
+path = "src/bin/reject-declaration-code.rs"
+
+[workspace]

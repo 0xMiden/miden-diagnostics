@@ -1,0 +1,30 @@
+[workspace]
+
+[package]
+name = "std-runtime"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97"
+publish = false
+autobins = false
+
+[dependencies]
+miden-diagnostics = { path = "../../..", default-features = false, features = ["std"] }
+
+[[bin]]
+name = "result-report"
+path = "src/bin/result-report.rs"
+
+[[bin]]
+name = "exit-outcome"
+path = "src/bin/exit-outcome.rs"
+
+[[bin]]
+name = "panic-hook"
+path = "src/bin/panic-hook.rs"
+
+[profile.dev]
+panic = "unwind"
+
+[profile.release]
+panic = "abort"

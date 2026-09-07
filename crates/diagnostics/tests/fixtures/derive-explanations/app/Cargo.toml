@@ -1,0 +1,10 @@
+[package]
+name = "derive-explanation-app"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+derive-definitions = { path = "../definitions" }
+runtime_api = { package = "miden-diagnostics", path = "../../../..", default-features = false, features = ["embed-explanations"] }

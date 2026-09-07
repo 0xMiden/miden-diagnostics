@@ -1,0 +1,1 @@
+same.masm [session 20:0]:1:1: error[miden::parser/E0007]: unexpected token: unexpected
