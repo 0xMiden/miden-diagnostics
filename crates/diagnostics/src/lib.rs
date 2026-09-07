@@ -257,7 +257,7 @@ macro_rules! __diagnostic_format_args {
     ($message:literal) => {
         format_args!($message)
     };
-    (($message:expr)) => {
+    ($message:expr) => {
         format_args!("{}", $message)
     };
 }
@@ -375,10 +375,10 @@ macro_rules! __diagnostic_build {
     (
         $root:expr;
         $(labels: [
-            $($label_kind:ident($label_span:expr $(, $label_message:tt)?)),* $(,)?
+            $($label_kind:ident($label_span:expr $(, $label_message:expr)?)),* $(,)?
         ],)?
         $(notes: [
-            $($note_kind:ident($note_message:tt)),* $(,)?
+            $($note_kind:ident($note_message:expr)),* $(,)?
         ],)?
         $(suggestions: [
             $($suggestion:tt)*
